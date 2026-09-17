@@ -1,0 +1,49 @@
+{
+  "description": "Disposable public TypeScript expense-approval API used as the neutral starting point for an independent, evidence-backed Rosetta evaluation.",
+  "servicesDescription": {
+    "expense-approval-api": "Fastify + SQLite service to create, list, read, approve, and reject expense submissions."
+  },
+  "codingAgents": [
+    "claude-code"
+  ],
+  "sdlc": {
+    "issue_tracker": "[ISSUE_TRACKER - e.g. Jira, GitHub Issues, Linear]",
+    "issue_tracker_project": "[ISSUE_TRACKER_URL - e.g. https://myorg.atlassian.net/jira/...]",
+    "wiki": "[WIKI - e.g. Confluence, Notion, GitHub Wiki]",
+    "wiki_project": "[WIKI_URL - e.g. https://myorg.atlassian.net/wiki/...]",
+    "test_management": "[TEST_MANAGEMENT - e.g. TestRail, Zephyr; omit if not used]",
+    "test_management_project": "[TEST_MANAGEMENT_PROJECT - project key or URL]",
+    "scm": "Git",
+    "scm_project": "https://github.com/chamathsilva/rosetta-poc-expense-approval",
+    "build_management": "[BUILD_MANAGEMENT - e.g. GitHub Actions, Jenkins, CircleCI]",
+    "build_management_project": "[BUILD_MANAGEMENT_URL - e.g. https://github.com/org/repo/actions]",
+    "ux": "[UX_TOOL - e.g. Figma, Sketch; omit if not applicable]",
+    "ux_project": "[UX_PROJECT - project name or URL]",
+    "infrastructure": "[INFRASTRUCTURE - e.g. Kubernetes, ECS, serverless]",
+    "infrastructure_project": "[INFRASTRUCTURE_PROJECT - project name or cluster name]",
+    "iac": "[IAC_TOOL - e.g. Terraform, Pulumi, CDK; omit if not applicable]",
+    "iac_project": "[IAC_PROJECT - project or workspace name]",
+    "hosting": "[HOSTING - e.g. AWS, GCP, Azure, on-prem]",
+    "hosting_project": "[HOSTING_PROJECT - project or account name]",
+    "monitoring": "[MONITORING - e.g. Prometheus, Datadog, New Relic]",
+    "monitoring_project": "[MONITORING_PROJECT - dashboard URL or project name]",
+    "logging": "[LOGGING - e.g. Grafana, Splunk, ELK]",
+    "logging_project": "[LOGGING_PROJECT - dashboard URL or project name]",
+    "security": "[SECURITY_TOOL - e.g. Vault, AWS Secrets Manager; omit if not applicable]",
+    "security_project": "[SECURITY_PROJECT - project or namespace]",
+    "collaboration_project": "[COLLABORATION_PROJECT - team or community name]",
+    "unit_tests": "in-repository (tests/)",
+    "integration_tests": "in-repository (tests/, vitest)",
+    "e2e_tests": "[E2E_TESTS_LOCATION - e.g. in-repository; none present]",
+    "performance_tests": "[PERFORMANCE_TESTS_LOCATION - omit if none]",
+    "testing_harness": "vitest (npm test / npm run check)",
+    "code_graph": "[CODE_GRAPH_TOOL - e.g. Graphify, GitNexus, CodeScene; omit if not used]"
+  },
+  "vocabulary": {
+    "expense": "A submitted expense claim: created, then approved or rejected via a decision endpoint.",
+    "seed": "The immutable baseline state of this repo, tagged expense-seed-v1, used as the shared starting point for evaluation runs."
+  },
+  "versions": {
+    "rosetta": "3.1.13"
+  }
+}

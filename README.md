@@ -18,7 +18,7 @@ The immutable starting point for the expense case study and governance probes is
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/health` | Check API and database readiness. |
+| `GET` | `/health` | Liveness check — confirms the API process is up. Does not query the database. |
 | `POST` | `/expenses` | Create a submitted expense. |
 | `GET` | `/expenses` | List all expenses. |
 | `GET` | `/expenses/:expenseId` | Read one expense. |
