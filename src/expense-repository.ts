@@ -52,6 +52,7 @@ function mapExpense(row: Record<string, unknown>): Expense {
 
   return {
     id: requiredString(row, "id"),
+    tenantId: requiredString(row, "tenant_id"),
     employeeId: requiredString(row, "employee_id"),
     description: requiredString(row, "description"),
     amountCents,
@@ -71,6 +72,7 @@ export class ExpenseRepository {
     this.database.prepare(`
       INSERT INTO expenses (
         id,
+        tenant_id,
         employee_id,
         description,
         amount_cents,
@@ -80,9 +82,10 @@ export class ExpenseRepository {
         decision_note,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, 'SUBMITTED', NULL, NULL, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, 'SUBMITTED', NULL, NULL, ?, ?)
     `).run(
       input.id,
+      input.tenantId,
       input.employeeId,
       input.description,
       input.amountCents,
@@ -145,5 +148,14 @@ export class ExpenseRepository {
     }
 
     return this.findById(expenseId);
+  }
+
+  public delete(expenseId: string, tenantId: string): boolean {
+    const result = this.database.prepare(`
+      DELETE FROM expenses
+      WHERE id = ? AND tenant_id = ?
+    `).run(expenseId, tenantId);
+
+    return result.changes > 0;
   }
 }

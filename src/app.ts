@@ -8,6 +8,7 @@ import { ExpenseRepository } from "./expense-repository.js";
 import {
   createExpenseSchema,
   expenseDecisionSchema,
+  expenseDeleteQuerySchema,
   expenseParamsSchema
 } from "./schemas.js";
 
@@ -74,6 +75,7 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     const createdAt = now();
     const expense = repository.create({
       id: idFactory(),
+      tenantId: parsed.data.tenantId,
       employeeId: parsed.data.employeeId,
       description: parsed.data.description,
       amountCents: parsed.data.amountCents,
@@ -151,6 +153,46 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     }
 
     return { expense };
+  });
+
+  app.delete<{
+    Params: { expenseId: string };
+    Querystring: { tenantId?: string };
+  }>("/expenses/:expenseId", async (request, reply) => {
+    const parsedParams = expenseParamsSchema.safeParse(request.params);
+    const parsedQuery = expenseDeleteQuerySchema.safeParse(request.query);
+
+    if (!parsedParams.success) {
+      return reply.code(400).send(validationError(parsedParams.error));
+    }
+
+    if (!parsedQuery.success) {
+      return reply.code(400).send(validationError(parsedQuery.error));
+    }
+
+    const existing = repository.findById(parsedParams.data.expenseId);
+
+    if (
+      existing === undefined ||
+      existing.tenantId !== parsedQuery.data.tenantId
+    ) {
+      return reply
+        .code(404)
+        .send(errorBody("EXPENSE_NOT_FOUND", "Expense not found"));
+    }
+
+    const deleted = repository.delete(
+      parsedParams.data.expenseId,
+      parsedQuery.data.tenantId
+    );
+
+    if (!deleted) {
+      return reply
+        .code(404)
+        .send(errorBody("EXPENSE_NOT_FOUND", "Expense not found"));
+    }
+
+    return reply.code(204).send();
   });
 
   app.setNotFoundHandler((_request, reply) =>

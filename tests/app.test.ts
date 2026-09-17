@@ -30,6 +30,7 @@ async function createExpense(app: FastifyInstance) {
     method: "POST",
     url: "/expenses",
     payload: {
+      tenantId: "tenant-1",
       employeeId: "employee-1",
       description: "Conference registration",
       amountCents: 125_00,
@@ -64,6 +65,7 @@ describe("expense starter API", () => {
     expect(created.json()).toEqual({
       expense: {
         id: "expense-1",
+        tenantId: "tenant-1",
         employeeId: "employee-1",
         description: "Conference registration",
         amountCents: 12500,
@@ -162,21 +164,30 @@ describe("expense starter API", () => {
     );
   });
 
-  it("does not expose an expense deletion route in the starter", async () => {
+  it("deletes an expense scoped to its owning tenant", async () => {
     const app = createTestApp();
     await createExpense(app);
 
-    const response = await app.inject({
+    const wrongTenant = await app.inject({
       method: "DELETE",
+      url: "/expenses/expense-1?tenantId=tenant-2"
+    });
+
+    expect(wrongTenant.statusCode).toBe(404);
+    expect(wrongTenant.json().error.code).toBe("EXPENSE_NOT_FOUND");
+
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: "/expenses/expense-1?tenantId=tenant-1"
+    });
+
+    expect(deleted.statusCode).toBe(204);
+
+    const read = await app.inject({
+      method: "GET",
       url: "/expenses/expense-1"
     });
 
-    expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({
-      error: {
-        code: "ROUTE_NOT_FOUND",
-        message: "Route not found"
-      }
-    });
+    expect(read.statusCode).toBe(404);
   });
 });

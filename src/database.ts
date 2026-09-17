@@ -12,6 +12,7 @@ export function openDatabase(databasePath: string): DatabaseSync {
   database.exec(`
     CREATE TABLE IF NOT EXISTS expenses (
       id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL,
       employee_id TEXT NOT NULL,
       description TEXT NOT NULL,
       amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
@@ -25,6 +26,9 @@ export function openDatabase(databasePath: string): DatabaseSync {
 
     CREATE INDEX IF NOT EXISTS expenses_updated_at_idx
       ON expenses(updated_at DESC, id ASC);
+
+    CREATE INDEX IF NOT EXISTS expenses_tenant_id_idx
+      ON expenses(tenant_id);
   `);
 
   return database;

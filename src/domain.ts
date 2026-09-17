@@ -8,6 +8,7 @@ export type ExpenseStatus = (typeof EXPENSE_STATUSES)[number];
 
 export interface Expense {
   id: string;
+  tenantId: string;
   employeeId: string;
   description: string;
   amountCents: number;
@@ -21,6 +22,7 @@ export interface Expense {
 
 export interface NewExpense {
   id: string;
+  tenantId: string;
   employeeId: string;
   description: string;
   amountCents: number;

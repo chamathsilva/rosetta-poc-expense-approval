@@ -34,16 +34,17 @@
 
 An expense is one reimbursement claim. It carries:
 
-- who submitted it, a free-text description, an amount, and a currency;
+- which tenant it belongs to, who submitted it, a free-text description, an amount, and a currency;
 - its decision status, and — once decided — who decided it and an optional note;
 - when it was created and when it last changed.
 
 ## Capabilities
 
-- **Submit an expense** — an employee records a claim; it enters the system already submitted and awaiting a decision.
+- **Submit an expense** — an employee records a claim for a tenant; it enters the system already submitted and awaiting a decision.
 - **List expenses** — all claims, most recently changed first.
 - **Read one expense** — retrieve a single claim by its reference.
 - **Decide an expense** — a reviewer approves or rejects a claim awaiting decision, optionally attaching a note.
+- **Delete an expense** — remove a claim, scoped to the tenant that owns it; a caller cannot delete another tenant's expense.
 - **Readiness check** — confirm the service is up.
 
 ## Business Rules
@@ -52,7 +53,7 @@ An expense is one reimbursement claim. It carries:
 - A decision is **approve or reject** — there is no third outcome, no "pending" decision, no partial approval.
 - A decision is **final and one-time**. Once approved or rejected, a claim cannot be re-decided, reversed, amended, or withdrawn. A second attempt is refused as a conflict.
 - A claim **cannot be edited** after submission. There is no update capability.
-- A claim **cannot be deleted**. This is deliberate, not an oversight — it is asserted by test.
+- A claim **can be deleted**, but only by a caller supplying the tenant it belongs to. A tenant mismatch (or unknown expense) is refused as not found.
 - A decision note is **optional**; a reviewer reference is **mandatory**.
 - An amount must be **positive** and capped at 100,000,000 cents — an input-sanity bound, not an approval threshold. A currency must be a three-letter code — format-checked only, not validated against ISO-4217 or converted.
 - Rejected input is refused outright rather than corrected or partially accepted.
@@ -68,10 +69,10 @@ SUBMITTED ──approve──> APPROVED  (terminal)
 
 The starter has none of the following, by design. Their absence is part of the neutral baseline:
 
-- authentication, authorization, or any check that a reviewer may decide a given claim (including self-approval);
+- authentication, authorization, or any check that a reviewer may decide a given claim (including self-approval); tenant identifiers are caller-supplied, like employee and reviewer references, with no verification of caller identity;
 - separation of duties, approval thresholds, delegation, or multi-step approval chains;
 - an audit trail beyond the last-changed timestamp;
-- editing, withdrawal, deletion, or reopening of a claim;
+- editing, withdrawal, or reopening of a claim;
 - filtering, searching, or paging of the claim list;
 - currency conversion, tax handling, receipts, attachments, or payment;
 - notification of any party about a submission or a decision;

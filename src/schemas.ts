@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const createExpenseSchema = z.object({
+  tenantId: z.string().trim().min(1).max(100),
   employeeId: z.string().trim().min(1).max(100),
   description: z.string().trim().min(1).max(500),
   amountCents: z.number().int().positive().max(100_000_000),
@@ -17,5 +18,10 @@ export const expenseParamsSchema = z.object({
   expenseId: z.string().trim().min(1).max(100)
 }).strict();
 
+export const expenseDeleteQuerySchema = z.object({
+  tenantId: z.string().trim().min(1).max(100)
+}).strict();
+
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
 export type ExpenseDecisionInput = z.infer<typeof expenseDecisionSchema>;
+export type ExpenseDeleteQueryInput = z.infer<typeof expenseDeleteQuerySchema>;

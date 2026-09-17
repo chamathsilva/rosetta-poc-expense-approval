@@ -7,6 +7,7 @@ POST /expenses
 Content-Type: application/json
 
 {
+  "tenantId": "tenant-1",
   "employeeId": "employee-1",
   "description": "Conference registration",
   "amountCents": 12500,
@@ -47,8 +48,17 @@ Content-Type: application/json
 
 `status` must be `APPROVED` or `REJECTED`. A submission can be decided once; a later attempt returns `409` with code `EXPENSE_ALREADY_DECIDED`.
 
+## Delete an expense
+
+```http
+DELETE /expenses/:expenseId?tenantId=tenant-1
+```
+
+Removes the expense if `tenantId` matches the expense's owning tenant. Returns `204` with no body on success. Returns `404` with code `EXPENSE_NOT_FOUND` when the expense does not exist **or** belongs to a different tenant — the two cases are not distinguished.
+
 ## Validation
 
+- `tenantId`: non-empty string, at most 100 characters.
 - `employeeId`: non-empty string, at most 100 characters.
 - `description`: non-empty string, at most 500 characters.
 - `amountCents`: positive integer, at most 100,000,000.
