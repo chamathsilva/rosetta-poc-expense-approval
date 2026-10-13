@@ -1,0 +1,49 @@
+{
+  "description": "Disposable TypeScript expense-approval API used as the shared, neutral starting point for an independent, evidence-backed Rosetta evaluation.",
+  "servicesDescription": {
+    "expense-approval-api": "Fastify service for submitting, listing, reading, and deciding (approve/reject) expense submissions, backed by SQLite persistence."
+  },
+  "codingAgents": [
+    "claude-code"
+  ],
+  "sdlc": {
+    "issue_tracker": "none",
+    "issue_tracker_project": "none",
+    "wiki": "none",
+    "wiki_project": "none",
+    "test_management": "none",
+    "test_management_project": "none",
+    "scm": "GitHub",
+    "scm_project": "https://github.com/chamathsilva/rosetta-poc-expense-approval",
+    "build_management": "none",
+    "build_management_project": "none",
+    "ux": "none",
+    "ux_project": "none",
+    "infrastructure": "none",
+    "infrastructure_project": "none",
+    "iac": "none",
+    "iac_project": "none",
+    "hosting": "none",
+    "hosting_project": "none",
+    "monitoring": "none",
+    "monitoring_project": "none",
+    "logging": "none",
+    "logging_project": "none",
+    "security": "none",
+    "security_project": "none",
+    "collaboration_project": "none",
+    "unit_tests": "none (seed has API integration tests only)",
+    "integration_tests": "in-repository (tests/, Vitest)",
+    "e2e_tests": "none",
+    "performance_tests": "none",
+    "testing_harness": "vitest (npm test / npm run check)",
+    "code_graph": "none"
+  },
+  "vocabulary": {
+    "expense submission": "A request created via POST /expenses, starting in status SUBMITTED.",
+    "decision": "The approve/reject action applied once to a SUBMITTED expense via PATCH /expenses/:expenseId/decision."
+  },
+  "versions": {
+    "rosetta": "3.1.13"
+  }
+}
