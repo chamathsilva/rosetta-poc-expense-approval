@@ -1,6 +1,11 @@
 # EXP-003 Architecture Notes (Phase 2 Design)
 
-Status: draft v1 below is PRESERVED AS-ORIGINALLY-WRITTEN for history. It received design-review feedback (not approval) — see `## Design Review Revision 1` at the end of this file for corrections, resolved policy decisions, and the revised error-priority matrix. The document as a whole remains DRAFT, not approved. Design only, no code. Specs and plan come in Phase 4 (SPECS.md, PLAN.md), which has not started.
+Current status (2026-10-14): the author approved Revision2 plus evaluator consistency reconciliation
+with `Yes, I reviewed the design.` on 2026-10-13. Specifications/plan now exist but await separate
+Phase6 approval. No feature implementation has started. Draft v1 and Revision1 below, including
+their pending-approval wording and earlier terminology, are historical; later controlling revisions
+and current SPECS take precedence. Business authorization, Rosetta phase approvals and host tool
+permissions remain distinct. Do not read historical pending statements as current gate status.
 
 ## Why / Scope
 
