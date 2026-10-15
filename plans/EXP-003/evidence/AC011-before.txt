@@ -1,0 +1,4 @@
+status: 414
+body: {"error":"Bad Request","code":"FST_ERR_MAX_PARAM_LENGTH","message":"'/expenses/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is exceeding the max param length","statusCode":414}
+RESULT: FAIL (expected 400 VALIDATION_ERROR, got 414)
+EXIT_CODE=1

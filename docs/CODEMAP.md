@@ -3,7 +3,7 @@
 >
 > Purpose: list of folders and files in the codebase. Content: workspace-relative path headers with recursive child counts and a short description, immediate child filenames only. Style: 3-4 levels deep, generated, no manual edits.
 
-# . (79 files) — Expense approval API service
+# . (91 files) — Expense approval API service
 
 - .editorconfig
 - .gitignore
@@ -52,29 +52,41 @@
 - zod-strict-schema.md
 
 
-## plans (23 files) — Documentation files
+## plans (35 files) — Documentation files
 
 
-### plans/EXP-003 (23 files) — Documentation files
+### plans/EXP-003 (35 files) — Documentation files
 
+- AC-011-FOLLOWUP-MANIFEST.md
+- AC-011-FOLLOWUP-PLAN.md
+- AC-011-FOLLOWUP-REPORT.md
+- ac011-phase12-review-findings.md
+- ac011-phase8-review-findings.md
 - COORDINATOR-CLOSEOUT.md
-- EXP-003-REQUIREMENT-MAP.md
-- phase12-review-findings.md
-- phase8-docs-review-findings.md
-- phase8-review-findings.md
-- phase9-validation-findings.md
 - EXP-003-PLAN.md
+- EXP-003-REQUIREMENT-MAP.md
 - EXP-003-SPECS.md
 - HANDOFF.md
 - REQUEST.md
 - architecture-notes.md
 - evaluator-plan-review.md
+- phase12-review-findings.md
 - phase5-rereview.md
 - phase5-review-findings.md
+- phase8-docs-review-findings.md
+- phase8-review-findings.md
+- phase9-validation-findings.md
 
 
-#### plans/EXP-003/evidence (9 files) — Documentation files
+#### plans/EXP-003/evidence (16 files) — Documentation files
 
+- AC011-after.txt
+- AC011-before.txt
+- AC011-check-failed-encoded-path-run.txt
+- AC011-check.txt
+- AC011-ci-check.txt
+- AC011-coordinator-check.txt
+- AC011-coordinator-final-check.txt
 - COORDINATOR-CHECK.txt
 - EVALUATOR-SQLITE-PREFLIGHT.txt
 - FINAL-WORKFLOW.md
@@ -89,23 +101,24 @@
 ## src (13 files) — Primary application source code
 
 - actor.ts
+- app.ts
 - audit-repository.ts
+- database.ts
+- domain.ts
 - errors.ts
+- expense-repository.ts
 - expense-service.ts
 - idempotency-repository.ts
 - policy.ts
-- transaction.ts
-- app.ts
-- database.ts
-- domain.ts
-- expense-repository.ts
 - schemas.ts
 - server.ts
+- transaction.ts
 
 
 ## tests (10 files) — Vitest test suites
 
 - access.test.ts
+- app.test.ts
 - audit.test.ts
 - errors.test.ts
 - fingerprint.test.ts
@@ -114,4 +127,3 @@
 - policy.test.ts
 - sqlite-runtime.test.ts
 - support.ts
-- app.test.ts

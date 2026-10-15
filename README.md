@@ -18,9 +18,16 @@ The immutable starting point for the expense case study and governance probes is
 
 The EXP-003 workstream extends the baseline above with a tenant/actor boundary, RBAC, an append-only audit log, idempotent mutations, and a delete/restore lifecycle. Full list of behavior changes from the baseline: [`docs/EXP-003-COMPATIBILITY.md`](docs/EXP-003-COMPATIBILITY.md).
 
+AC-011 follow-up (2026-10-15): oversized route parameters now receive a safe400 response;
+HEAD responses have no body. The unchanged router limit applies before authentication and
+body parsing. Native clean-install/check and independent coordinator checks pass204 tests,
+typecheck and build. See the [review report](plans/EXP-003/AC-011-FOLLOWUP-REPORT.md) and
+[supplemental manifest](plans/EXP-003/AC-011-FOLLOWUP-MANIFEST.md). Publication is pending.
+
 **Disclaimer: the headers below simulate a trusted upstream authentication layer. They are not production authentication** — any caller can forge them.
 
-Every `/expenses*` request requires three headers:
+Every normally routed `/expenses*` operation requires three headers (oversized parameters can
+be rejected earlier by the router, as described above):
 
 | Header | Rule |
 |---|---|

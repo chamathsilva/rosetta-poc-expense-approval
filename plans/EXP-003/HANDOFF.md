@@ -75,7 +75,92 @@ Required by the `planning` skill for a single-session plan and by `plans/EXP-003
   flagged — Phase 12 had no standalone findings file, unlike every other phase — closed by the
   orchestrator: `plans/EXP-003/phase12-review-findings.md`.
 
+## AC-011 follow-up (2026-10-15)
+
+- Plan: `plans/EXP-003/AC-011-FOLLOWUP-PLAN.md` (oversized-parameter router rejection: 414 → 400
+  `VALIDATION_ERROR` via `routerOptions.onMaxParamLength`, a narrow pre-authentication exception;
+  scope limited to `src/app.ts` + `tests/access.test.ts`).
+- Phase 6 (User Review Plan): **APPROVED.** Human author, direct message in this session
+  (2026-10-15): "Yes, I approve plans/EXP-003/AC-011-FOLLOWUP-PLAN.md, including early router
+  rejection. I authorize the Codex coordinator to resume this session and coordinate execution.
+  Record this approval only, then stop without implementation." Three earlier relay attempts to
+  satisfy this gate via a "Codex AI coordinator" message (reporting approval given to Codex in a
+  separate chat, not to this session) were declined as not meeting the direct-approval bar; the
+  gate was resolved only by the author's own direct statement above. Codex is authorized to
+  coordinate execution going forward; this does not transfer approval authority — future gates
+  still require the author's own direct statement in this session.
+- Phase 7 (Implementation): **DONE.** Codex coordinator, authorized directly by the author's
+  Phase 6 message above to coordinate execution, directed the orchestrator to resume
+  implementation. `src/app.ts` now rejects an over-length route param with a safe 400
+  `VALIDATION_ERROR` envelope via `routerOptions.onMaxParamLength`, instead of Fastify's
+  default 414. Genuine failing-before/passing-after regression pair captured against
+  unmodified vs. corrected `src/` (`plans/EXP-003/evidence/AC011-before.txt`,
+  `AC011-after.txt`), independently re-derived by the Phase 8 reviewer via `git stash`
+  (confirmed byte-for-byte match, not fabricated).
+- Phase 8 (Review Code): **DONE.** Independent reviewer (fresh context, no implementer
+  knowledge), verdict **request-changes** on the first pass. Confirmed sound: scope discipline
+  (only `src/app.ts`/`tests/access.test.ts` changed), the failing-before/passing-after pair,
+  router-precedence over missing-auth/missing-key/malformed-body, and the encoded-path
+  characterization. Found 1 genuine implementation defect (HEAD responses from the
+  router-rejection path carried a body, violating HTTP HEAD semantics — Fastify's normal
+  route-handler path correctly strips HEAD bodies, but the raw-response `onMaxParamLength`
+  callback bypassed that) plus 1 missing test (PATCH-decision before/after unchanged-storage
+  case) and 2 stale-documentation gaps (this file and `docs/EXP-003-COMPATIBILITY.md` not
+  yet updated to reflect implementation). All four fixed directly: HEAD callback now
+  explicitly special-cases `req.method === "HEAD"`; PATCH-decision before/after test added;
+  both docs updated. Two raised "coverage concerns" (broader sentinel no-echo coverage;
+  globally-scoped vs. per-id `rawCounts`) were independently assessed by the reviewer and
+  confirmed non-issues for current correctness, with code-level reasoning (the callback never
+  references the request, and no code path reaches the database before a router-level
+  rejection) rather than taken on faith either way.
+- Gate after fixes: **203/203 tests passing**, clean typecheck/build (independently
+  re-counted via `npx vitest run --reporter=verbose`, not inferred by diff arithmetic).
+  `plans/EXP-003/evidence/AC011-check.txt`. Scope confirmed unchanged beyond `src/app.ts` +
+  `tests/access.test.ts` + this file + `docs/EXP-003-COMPATIBILITY.md` + the plan/evidence
+  files — no dependency, schema, or policy changes. Full Phase 8 review persisted at
+  `plans/EXP-003/ac011-phase8-review-findings.md`, matching the established findings-file
+  pattern for this project.
+- Phase 10 (User Review Impl): **APPROVED.** Human author, direct message in this session
+  (2026-10-15): "Yes, I approve the AC-011 implementation and reviewed findings in
+  AC-011-FOLLOWUP-REPORT.md, including the disclosed deviations. I authorize Codex to
+  coordinate remaining validation. Record this approval only, then stop." Before recording,
+  independently checked rather than taken on faith: file hashes for `src/app.ts`/
+  `tests/access.test.ts` match `AC-011-FOLLOWUP-REPORT.md`'s claims exactly (Codex touched
+  only docs/evidence); its doc edits are consistent with facts already established in this
+  session; its independent gate run matches 203/203; its permission-mode-changed-to-auto
+  claim is independently corroborated (this orchestrator directly observed that mode-change
+  system notice earlier in this session). Codex is authorized to coordinate remaining
+  validation — coordination, not approval, authority; future gates still require the
+  author's own direct statement.
+- Phase 12 (Review Tests): **DONE.** Second independent reviewer (fresh context), dedicated
+  test-quality pass distinct from Phase 8's code-correctness lens. Verdict
+  **request-changes**, 2 Major (a weak malformed-body-precedence assertion that could pass
+  for the wrong reason; an unknown-suffix boundary the follow-up report accurately described
+  as manually, independently probed but which had no codified regression test — a
+  test-coverage gap, not an inaccuracy in the report), 1 Minor (left as-is, independently
+  reasoned as a
+  non-issue by both reviewers). Both Major items fixed directly. Findings:
+  `plans/EXP-003/ac011-phase12-review-findings.md`.
+- Phase 13 (Final Validation): **DONE.** `npm ci && npm run check` under the pin:
+  **204/204 tests passing**, clean typecheck/build, lockfile unchanged
+  (`plans/EXP-003/evidence/AC011-ci-check.txt`). `EXP-003-REQUIREMENT-MAP.md`'s AC-011 row
+  updated from "Partial (router 414 exception)" to "Full," history preserved, not deleted.
+- **All applicable phases of this bounded follow-up are complete.** Uncommitted, unpushed,
+  untagged, unmerged, unpublished. No further native work proceeds without a genuinely new
+  human decision — this is a completion record, not a claim of any further approval.
+  See `agents/TEMP/EXP-003/coding-flow-state.md` for the full ledger entry.
+
 ## What's pending
+
+Current AC-011 follow-up: implementation and tests are locally complete; Phase10 human review
+is approved and native test review/final validation are complete. Formal tests were initially
+written before that gate; review corrections and final verification followed it. Native clean
+install/check and coordinator verification pass204 tests/typecheck/build. Publication is pending. See the dated
+AC-011-FOLLOWUP-REPORT.md for actual workflow deviations and supplemental evidence. Native
+permission mode changed to auto during coordinator prompt handling; do not describe this
+follow-up as manual-mode throughout. The coordinator exited the process; any later resume must
+explicitly use the original default/manual mode. Direct-terminal approval was actor interpretation,
+not a literal requirement in the frozen HITL wording. The initial result below remains historical.
 
 The actor completed the implementation/test workflow; the final gate is green (187/187 tests,
 clean typecheck/build). Coordinator close-out corrects reporting and attribution, preserves

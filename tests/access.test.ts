@@ -388,18 +388,307 @@ describe("access control", () => {
       expect(response.json().error.code).toBe("ACTOR_MISMATCH");
     });
 
-    it("a 101-char expenseId param exceeds Fastify's router param-length limit ⇒ 414 (never reaches schema validation)", async () => {
-      const { app } = createTestApp();
-      const response = await app.inject({
-        method: "GET",
-        url: `/expenses/${"a".repeat(101)}`,
-        headers: actorHeaders(EMPLOYEE_A1)
+    describe("router-level oversized-parameter rejection (AC-011 follow-up)", () => {
+      it("a 100-char expenseId param is not rejected for length (reaches the service, 404 EXPENSE_NOT_FOUND)", async () => {
+        const { app } = createTestApp();
+        const response = await app.inject({
+          method: "GET",
+          url: `/expenses/${"a".repeat(100)}`,
+          headers: actorHeaders(EMPLOYEE_A1)
+        });
+
+        expect(response.statusCode).toBe(404);
+        expect(response.json().error.code).toBe("EXPENSE_NOT_FOUND");
       });
 
-      // find-my-way's default maxParamLength (100) rejects the URL at the
-      // router level, before any route handler or Zod schema runs, so this
-      // never reaches expenseParamsSchema's own max(100) check.
-      expect(response.statusCode).toBe(414);
+      it("a 99-char expenseId param is not rejected for length (reaches the service, 404 EXPENSE_NOT_FOUND)", async () => {
+        const { app } = createTestApp();
+        const response = await app.inject({
+          method: "GET",
+          url: `/expenses/${"a".repeat(99)}`,
+          headers: actorHeaders(EMPLOYEE_A1)
+        });
+
+        expect(response.statusCode).toBe(404);
+        expect(response.json().error.code).toBe("EXPENSE_NOT_FOUND");
+      });
+
+      it.each([
+        ["GET", "GET" as const, (id: string) => `/expenses/${id}`, undefined],
+        [
+          "PATCH decision",
+          "PATCH" as const,
+          (id: string) => `/expenses/${id}/decision`,
+          { status: "APPROVED" }
+        ],
+        ["DELETE", "DELETE" as const, (id: string) => `/expenses/${id}`, undefined],
+        [
+          "POST restore",
+          "POST" as const,
+          (id: string) => `/expenses/${id}/restore`,
+          undefined
+        ]
+      ])(
+        "a 101-char expenseId param ⇒ 400 VALIDATION_ERROR, not 414, for %s (AC-011 approved behavior)",
+        async (_label, method, buildUrl, payload) => {
+          const { app } = createTestApp();
+          const sentinelId = "a".repeat(101);
+          const headers = {
+            ...actorHeaders(EMPLOYEE_A1),
+            "idempotency-key": "k-oversize"
+          };
+
+          const response =
+            payload === undefined
+              ? await app.inject({ method, url: buildUrl(sentinelId), headers })
+              : await app.inject({
+                  method,
+                  url: buildUrl(sentinelId),
+                  headers,
+                  payload
+                });
+
+          expect(response.statusCode).toBe(400);
+          expect(response.json()).toEqual({
+            error: {
+              code: "VALIDATION_ERROR",
+              message: "Request validation failed"
+            }
+          });
+          expect(response.headers["content-type"]).toContain("application/json");
+          expect(response.body).not.toContain(sentinelId);
+        }
+      );
+
+      it("a 1024-char expenseId param (well beyond the limit) ⇒ 400 VALIDATION_ERROR, same as 101", async () => {
+        const { app } = createTestApp();
+        const sentinelId = "b".repeat(1024);
+        const response = await app.inject({
+          method: "GET",
+          url: `/expenses/${sentinelId}`,
+          headers: actorHeaders(EMPLOYEE_A1)
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error.code).toBe("VALIDATION_ERROR");
+        expect(response.body).not.toContain(sentinelId);
+      });
+
+      it("an oversized param wins over missing actor headers: no headers ⇒ 400, not 401 (router runs before the actor hook)", async () => {
+        const { app } = createTestApp();
+        const response = await app.inject({
+          method: "GET",
+          url: `/expenses/${"c".repeat(101)}`
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error.code).toBe("VALIDATION_ERROR");
+      });
+
+      it("an oversized param wins over a missing Idempotency-Key: no key ⇒ 400 VALIDATION_ERROR, not IDEMPOTENCY_KEY_REQUIRED", async () => {
+        const { app } = createTestApp();
+        const response = await app.inject({
+          method: "DELETE",
+          url: `/expenses/${"d".repeat(101)}`,
+          headers: actorHeaders(EMPLOYEE_A1)
+        });
+
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error.code).toBe("VALIDATION_ERROR");
+      });
+
+      it("an oversized param wins over a malformed JSON body: router rejects before body parsing runs", async () => {
+        const { app } = createTestApp();
+        const response = await app.inject({
+          method: "PATCH",
+          url: `/expenses/${"e".repeat(101)}/decision`,
+          headers: {
+            ...actorHeaders(MANAGER_A),
+            "idempotency-key": "k-malformed",
+            "content-type": "application/json"
+          },
+          payload: "{not valid json"
+        });
+
+        // Assert the exact router-callback envelope, not just status+code:
+        // a genuine malformed-JSON body error is ALSO mapped to 400
+        // VALIDATION_ERROR by bodyParserErrorResult (src/errors.ts), with a
+        // different message and no `details` field. Checking the full body
+        // (not just status/code) is what actually proves the router ran
+        // first instead of merely coinciding with the body-parser's result.
+        expect(response.json()).toEqual({
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Request validation failed"
+          }
+        });
+      });
+
+      it("a normally-routed request (valid-length param) keeps the existing 401-before-400/413/415 order, unaffected by this change", async () => {
+        const { app } = createTestApp();
+        const response = await app.inject({
+          method: "PATCH",
+          url: "/expenses/expense-1/decision",
+          headers: { "content-type": "application/json" },
+          payload: "{not valid json"
+        });
+
+        expect(response.statusCode).toBe(401);
+        expect(response.json().error.code).toBe("UNAUTHENTICATED");
+      });
+
+      it("an oversized-param rejection leaves expense/audit/idempotency storage unchanged (DELETE)", async () => {
+        const databasePath = createTempDatabasePath();
+        const { app } = createTestApp({ databasePath });
+
+        await createAs(app, EMPLOYEE_A1, "k1");
+
+        const reader = openReader(databasePath);
+        const before = rawCounts(reader, "expense-1");
+
+        const response = await app.inject({
+          method: "DELETE",
+          url: `/expenses/${"f".repeat(101)}`,
+          headers: { ...actorHeaders(EMPLOYEE_A1), "idempotency-key": "del-oversize" }
+        });
+
+        expect(response.statusCode).toBe(400);
+
+        const after = rawCounts(reader, "expense-1");
+
+        expect(after).toEqual(before);
+      });
+
+      it("an oversized-param rejection leaves expense/audit/idempotency storage unchanged (PATCH decision)", async () => {
+        const databasePath = createTempDatabasePath();
+        const { app } = createTestApp({ databasePath });
+
+        await createAs(app, EMPLOYEE_A1, "k1");
+
+        const reader = openReader(databasePath);
+        const before = rawCounts(reader, "expense-1");
+
+        const response = await app.inject({
+          method: "PATCH",
+          url: `/expenses/${"p".repeat(101)}/decision`,
+          headers: { ...actorHeaders(MANAGER_A), "idempotency-key": "decide-oversize" },
+          payload: { status: "APPROVED" }
+        });
+
+        expect(response.statusCode).toBe(400);
+
+        const after = rawCounts(reader, "expense-1");
+
+        expect(after).toEqual(before);
+      });
+
+      it("an oversized-param rejection leaves expense/audit/idempotency storage unchanged (POST restore)", async () => {
+        const databasePath = createTempDatabasePath();
+        const { app } = createTestApp({ databasePath });
+
+        await createAs(app, EMPLOYEE_A1, "k1");
+        await app.inject({
+          method: "DELETE",
+          url: "/expenses/expense-1",
+          headers: { ...actorHeaders(EMPLOYEE_A1), "idempotency-key": "del-1" }
+        });
+
+        const reader = openReader(databasePath);
+        const before = rawCounts(reader, "expense-1");
+
+        const response = await app.inject({
+          method: "POST",
+          url: `/expenses/${"g".repeat(101)}/restore`,
+          headers: { ...actorHeaders(EMPLOYEE_A1), "idempotency-key": "restore-oversize" }
+        });
+
+        expect(response.statusCode).toBe(400);
+
+        const after = rawCounts(reader, "expense-1");
+
+        expect(after).toEqual(before);
+      });
+
+      it("/health and unknown routes are unaffected by the router option change", async () => {
+        const { app } = createTestApp();
+
+        const health = await app.inject({ method: "GET", url: "/health" });
+        const unknown = await app.inject({
+          method: "GET",
+          url: "/does-not-exist",
+          headers: actorHeaders(EMPLOYEE_A1)
+        });
+
+        expect(health.statusCode).toBe(200);
+        expect(unknown.statusCode).toBe(404);
+        expect(unknown.json().error.code).toBe("ROUTE_NOT_FOUND");
+      });
+
+      it("the router's oversized-param rejection still wins for an unregistered suffix on an oversized id (/expenses/<101-char>/unknown)", async () => {
+        const { app } = createTestApp();
+        const response = await app.inject({
+          method: "GET",
+          url: `/expenses/${"q".repeat(101)}/unknown`,
+          headers: actorHeaders(EMPLOYEE_A1)
+        });
+
+        // The approved plan characterizes this exact boundary: "Unknown
+        // routes retain existing behavior except where the router itself
+        // selects its oversized-parameter callback." find-my-way's
+        // maxParamLength check runs during path/segment parsing, before
+        // route matching, so this selects the same 400 callback as a
+        // registered route with an oversized id — not the unrelated
+        // ROUTE_NOT_FOUND 404 path exercised just above.
+        expect(response.statusCode).toBe(400);
+        expect(response.json().error.code).toBe("VALIDATION_ERROR");
+      });
+
+      it("the auto-generated HEAD route for GET /expenses/:expenseId is also router-rejected at 400, with no body, for an oversized param", async () => {
+        const { app } = createTestApp();
+        const response = await app.inject({
+          method: "HEAD",
+          url: `/expenses/${"h".repeat(101)}`,
+          headers: actorHeaders(EMPLOYEE_A1)
+        });
+
+        // Characterizes actual router behavior: find-my-way's maxParamLength
+        // check runs during path/segment parsing, before method dispatch, so
+        // it applies identically to the framework-generated HEAD route. Not
+        // a claim that HEAD routes are introduced or re-policed by this change.
+        expect(response.statusCode).toBe(400);
+        // onMaxParamLength writes directly to the raw response, bypassing
+        // Fastify's normal reply pipeline that strips bodies for HEAD, so
+        // this is asserted explicitly rather than assumed (caught by Phase 8
+        // review as a real gap: an earlier version of this callback always
+        // wrote a body, violating HTTP HEAD semantics).
+        expect(response.body).toBe("");
+      });
+
+      it("characterizes percent-encoded path length: find-my-way measures the decoded segment, not the raw (encoded) one", async () => {
+        const { app } = createTestApp();
+        // 50 literal "a" + 17 "%20" tokens (3 raw chars each) = 101 raw
+        // chars in the URL, but decodes to only 50 + 17 = 67 chars.
+        const encodedId = "a".repeat(50) + "%20".repeat(17);
+
+        expect(encodedId.length).toBe(101);
+        expect(decodeURIComponent(encodedId).length).toBe(67);
+
+        const response = await app.inject({
+          method: "GET",
+          url: `/expenses/${encodedId}`,
+          headers: actorHeaders(EMPLOYEE_A1)
+        });
+
+        // Observed (not assumed) behavior: find-my-way's maxParamLength
+        // check runs against the decoded segment. A 101-raw/67-decoded-char
+        // param is NOT router-rejected — it reaches the service and returns
+        // the ordinary 404 EXPENSE_NOT_FOUND for a nonexistent id. This
+        // documents actual router behavior; it is not a new URL-
+        // normalization policy and does not change the 101-char-decoded
+        // cases exercised elsewhere in this file.
+        expect(response.statusCode).toBe(404);
+        expect(response.json().error.code).toBe("EXPENSE_NOT_FOUND");
+      });
     });
 
     it("a whitespace-only expenseId param ⇒ 400 VALIDATION_ERROR", async () => {

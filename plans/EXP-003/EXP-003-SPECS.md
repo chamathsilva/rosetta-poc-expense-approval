@@ -2,6 +2,11 @@
 
 Status: **Phase 6 APPROVED** (2026-10-14, author directly in this session: "Yes, I reviewed the plan and specs. Keep BASELINE-API.md unchanged, use separate compatibility notes, and preserve HTTP 400/413/415. Proceed with the original implementation plan and stop at Phase10 for my review."). Phases7–13 are now complete with187 tests passing; see HANDOFF.md and COORDINATOR-CLOSEOUT.md. Changelog entries below describe their historical planning checkpoints, not current pending approvals. Design of record: `plans/EXP-003/architecture-notes.md` → `## Design Review Revision 2` + `### Evaluator consistency reconciliation` (approved at Phase 3, controlling). Draft v1 / Revision 1 = history only. Companion HOW: `plans/EXP-003/EXP-003-PLAN.md`. Specs own target state; plan owns steps. Section IDs `S<n>` are stable cross-reference anchors.
 
+Current follow-up (2026-10-15): the approved AC-011 correction and S4/S5.12/S13 clarification
+are implemented. Phase10 approval is recorded; independent test review and final validation
+are complete, with204 tests/typecheck/build passing. Publication is pending. The187-test
+status above describes the original published checkpoint. See AC-011-FOLLOWUP-REPORT.md.
+
 ## Changelog (post Phase-5 review, 2026-10-13)
 
 No tier order or human policy decision changed. Entries describe proposed contracts and future
@@ -138,6 +143,15 @@ sequenceDiagram
 ## S4 Request Pipeline — 9 Tiers (controlling)
 
 Authority: design `### Corrected, non-contradictory tier order`. First failing tier wins; each tier runs only if all earlier tiers passed.
+
+**Approved AC-011 follow-up clarification (2026-10-15):** this tier order applies after
+successful routing. A decoded parameter over the router's unchanged100-character limit is
+rejected before T1–T9 by `routerOptions.onMaxParamLength`:400 with the fixed
+`errorBody("VALIDATION_ERROR")` JSON envelope, or an empty body for HEAD. Invalid credentials,
+keys or body cannot override this early400. Router rejection can also precede suffix matching;
+transport-level malformed URL/request failures remain outside this callback. See the separate
+AC-011-FOLLOWUP-PLAN.md and AC-011-FOLLOWUP-REPORT.md. Initial checkpoint51d282b retains its
+partial AC-011 assessment; this is a dated contract clarification and correction.
 
 | Tier | Owner | Check | Failure |
 |---|---|---|---|
@@ -384,6 +398,9 @@ export function requestFingerprint(input: FingerprintInput): string;   // S10
 - `setNotFoundHandler`: unchanged (`ROUTE_NOT_FOUND`, unauthenticated).
 - `setErrorHandler`: `const mapped = bodyParserErrorResult(error)`. If it is defined ⇒ `reply.code(mapped.statusCode).send(mapped.body)` (400/413/415, S5.7). Otherwise log via `request.log.error` and reply 500 `INTERNAL_ERROR`. (T2; break #8)
 - No custom `bodyLimit`: Fastify's default (1 MiB) applies and produces the 413.
+- AC-011 follow-up (2026-10-15): the dedicated `routerOptions.onMaxParamLength` callback sends
+  the S4 early400 envelope without interpolating request data and explicitly omits the HEAD body.
+  The default100-character parameter limit and the normal error handler remain unchanged.
 
 ## S6 Data Model & Migration
 
@@ -687,7 +704,9 @@ Each asserts the row, audit count and idempotency-record count are unchanged.
 | Elevation | role escalation via replay | T5/T6 re-run before T7 on every request |
 - SQL: static parameterized statements only. `PRAGMA user_version = N` interpolates only a code-owned integer.
 - Protocol quirk (M2, accepted): DELETE/restore with `Content-Type: application/json` and an empty body ⇒ 400 at T2, before any T3 check (S7.2). This is not a security issue, since no lookup or mutation happens, but clients must send `{}` or omit the header.
-- T1 precedes T2: an unauthenticated request with a malformed, oversize or unsupported body gets 401, never 400/413/415 (`onRequest` runs before body parsing).
+- T1 precedes T2 after successful routing: an unauthenticated routed request with a malformed,
+  oversize or unsupported body gets401 (`onRequest` precedes body parsing). The approved S4
+  over-limit-parameter rejection happens before both tiers and returns400 even without auth.
 
 ## S14 Limitations & Assumptions
 

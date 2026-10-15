@@ -1,6 +1,6 @@
 # EXP-003 Compatibility Changes
 
-Status: **Implemented (Phase 7, P8 Pass 1 — 2026-10-14).** This file was drafted in Phase 4/5 as a planning artifact describing proposed behavior; the breaks below are now implemented in `src/` as described, verified against the actual code (file:line cited per item) rather than transcribed from the design/specs claim. No test-suite counts appear here yet — the feature test suite (Phase 11) has not been written or run; this file will be revisited once it has.
+Status: **Initial implementation published 2026-10-14; AC-011 follow-up approved, implemented, reviewed and validated locally 2026-10-15; publication pending.** This file originated in planning and records implemented compatibility changes. Inline line numbers describe their original inspection checkpoint and may shift; current follow-up status is below.
 
 Source of record for all behavior described here: `plans/EXP-003/EXP-003-SPECS.md` §S7.4 and §S4. If this file and SPECS ever disagree, SPECS is authoritative and this file must be corrected to match.
 
@@ -45,9 +45,32 @@ Also documented (not separate numbered breaks):
 
 ## Validation and framework boundary
 
-The final suite passes187 tests across9 files, with clean typecheck/build. See
-`plans/EXP-003/evidence/P9-ci-check.txt` and `plans/EXP-003/EXP-003-REQUIREMENT-MAP.md`.
-A 101-character expense path parameter is rejected by Fastify's router with414 before Zod
-validation (observed in `tests/access.test.ts`); it is an exception to the general planned
-invalid-identifier400 contract, not evidence that every malformed identifier reaches the safe
-application error envelope. Foreign-writer SQLITE_BUSY behavior remains untested.
+The final suite passed 187 tests across 9 files as of Phase 13 (2026-10-14), with clean
+typecheck/build. See `plans/EXP-003/evidence/P9-ci-check.txt` and
+`plans/EXP-003/EXP-003-REQUIREMENT-MAP.md`.
+
+**AC-011 follow-up correction (2026-10-15, approved
+`plans/EXP-003/AC-011-FOLLOWUP-PLAN.md`):** an over-length (>100 char) expense path parameter
+is now rejected with a safe `400 VALIDATION_ERROR` envelope (`src/app.ts`'s
+`routerOptions.onMaxParamLength`), not Fastify's default `414`. This is a narrow
+*pre-authentication, pre-body-parsing* exception: find-my-way's router rejects the request
+before the actor hook, idempotency-key check, or body parsing run, so this 400 wins even over
+an otherwise-invalid request (missing auth headers, missing Idempotency-Key, malformed body) —
+characterized, not merely asserted, in `tests/access.test.ts`'s "router-level oversized-parameter
+rejection (AC-011 follow-up)" block. Separately characterized there: find-my-way measures the
+*decoded* path segment's length, not the raw/encoded one; and the oversized-param HEAD-route
+rejection correctly carries no body (the raw-response callback explicitly special-cases
+`HEAD`, mirroring Fastify's own body-stripping behavior for normal routes). The suite is now
+204 tests across the same9 files after test-review corrections; see the native `AC011-check.txt`
+and `AC011-ci-check.txt`, and the independent `AC011-coordinator-final-check.txt` under
+`plans/EXP-003/evidence/`. The intermediate coordinator log `AC011-coordinator-check.txt`
+records203; private snapshots preserve the corresponding original native logs. Original Phase13
+evidence (`P9-ci-check.txt`,187 tests) is unchanged, and the requirement map retains its original
+qualification alongside the dated follow-up update.
+
+Foreign-writer SQLITE_BUSY behavior remains untested.
+
+The router may select its over-limit callback before matching a trailing route suffix:
+`/expenses/<over-limit-id>/unknown` returns400, while an unrelated unregistered route still
+returns404. This is the preserved router-selection boundary, not a new endpoint. HEAD body
+behavior was verified through injection; this follow-up does not claim a live-socket protocol audit.

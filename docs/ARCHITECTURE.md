@@ -53,6 +53,7 @@ server.ts --(env)--> buildApp() in app.ts
 ## Request Pipeline
 
 - Fixed 9-tier error-priority order; first failing tier wins, each tier runs only if all earlier tiers passed. Full tier table and per-route applicability: `plans/EXP-003/EXP-003-SPECS.md` S4.
+- AC-011 follow-up (2026-10-15): before those tiers, the router rejects decoded parameters over100 characters with400 `VALIDATION_ERROR` (no request echo; HEAD has no body). This precedes auth/body/key checks and may precede suffix matching. See the dated compatibility notes and follow-up report; the router limit itself is unchanged.
 - T1 actor headers (401) runs in `onRequest`, before body parsing, so an unauthenticated request with a malformed body still gets 401. T2 body-parse (400/413/415) and T3 schema/key (400) are syntax-only. T4 is tenant-bound existence (tombstone-blind, 404); T4b is ordinary visibility (tombstone-hiding + employee read-scope, 404) and applies only to `GET /:id`, list and decision — delete/restore skip T4b because they are tombstone-aware. T5 role capability (403), T6 identity/ownership/limit (403), T7 idempotency lookup (replay or 409), T8 state precondition (409), T9 guarded mutation + audit + idempotency save (500 on any throw, rollback).
 - `now()` is called exactly once per mutating command, as the first statement inside its transaction; `idFactory()` only at T9 of a fresh create.
 
@@ -72,7 +73,7 @@ server.ts --(env)--> buildApp() in app.ts
 
 | Code | HTTP | Tier | Source |
 |---|---|---|---|
-| `VALIDATION_ERROR` | 400 | T2/T3 | Zod failure, or body-parse mapping (fixed message, no details) |
+| `VALIDATION_ERROR` | 400 | Router/T2/T3 | Over-limit router parameter, Zod failure, or body-parse mapping (fixed message, no details) |
 | `PAYLOAD_TOO_LARGE` | 413 | T2 | Body over Fastify's 1 MiB default limit |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | T2 | Content type with no parser |
 | `IDEMPOTENCY_KEY_REQUIRED` / `_INVALID` | 400 | T3 | Missing / malformed `Idempotency-Key` |
@@ -112,6 +113,12 @@ server.ts --(env)--> buildApp() in app.ts
 
 ## Testing
 
+- Current AC-011 follow-up (2026-10-15, Phase 10 approved, Phase 12-13 complete): **204**
+  tests across 9 files; native and coordinator `npm run check` pass with Node 24.21.0/npm
+  11.6.2. Evidence: `plans/EXP-003/evidence/AC011-ci-check.txt` and `AC011-check.txt` (current),
+  `AC011-coordinator-final-check.txt` (independent204), and `AC011-coordinator-check.txt` (203, the intermediate count
+  between the Phase 8 and Phase 12 review fixes). The 187-test record below is historical
+  (pre-AC-011-follow-up).
 - 9 test files, **187 tests passing** (Phase 11/13; gate evidence: `plans/EXP-003/evidence/P9-ci-check.txt`): `tests/app.test.ts` (6 migrated baseline cases), `tests/policy.test.ts` (pure `policy.ts` unit cases, incl. restore-window boundaries), `tests/access.test.ts` (authentication/validation + tenancy/decision-policy integration, incl. the S12.3 matrix cross-tenant rows), `tests/audit.test.ts` (exact audit payload/count per mutation, append-only triggers, 8-case F-A/F-I atomicity fault injection), `tests/lifecycle.test.ts` (S12.3 idempotency/tombstone/restore matrix), `tests/migration.test.ts` (schema v2, legacy quarantine, reopen/newer-version handling), `tests/errors.test.ts` (`bodyParserErrorResult` S5.7 mapping, full catalog), `tests/sqlite-runtime.test.ts` (S11 runtime facts + `withTransaction` contract + `NotPromise<T>` compile-time constraint), `tests/fingerprint.test.ts` (`canonicalJson`/`requestFingerprint`). Shared helpers in `tests/support.ts`.
 - Clean-install gate (`npm ci && npm run check`, pinned Node v24.21.0/npm 11.6.2): typecheck (src+tests) → `vitest run` → `tsc` build, all green. Full requirement-to-test traceability: `plans/EXP-003/EXP-003-REQUIREMENT-MAP.md`.
 

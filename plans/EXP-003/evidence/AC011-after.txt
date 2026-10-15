@@ -1,0 +1,4 @@
+status: 400
+body: {"error":{"code":"VALIDATION_ERROR","message":"Request validation failed"}}
+RESULT: PASS (approved 400 VALIDATION_ERROR behavior present)
+EXIT_CODE=0

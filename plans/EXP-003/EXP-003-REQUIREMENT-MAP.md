@@ -5,14 +5,31 @@ the implementing code (file:line, verified against the files in this repo on 202
 test(s) that cover it, then record honest misses/corrections/limits. This file is itself the
 AC-014 deliverable — it is held to AC-014's own bar: map every requirement, record every gap.
 
-Coordinator close-out qualification: AC-011 is partial because a101-character path parameter
-gets Fastify414 before the planned400/application-safe-error layer. The passing test records
-that observed difference; it does not make the original specification fully satisfied.
-Other rows retain the actor's scoped coverage classifications, not production guarantees.
+**AC-011 follow-up update (2026-10-15):** the qualification below described the state as of
+2026-10-14 (Phase 13). A human-approved, independently reviewed follow-up
+(`plans/EXP-003/AC-011-FOLLOWUP-PLAN.md`, `AC-011-FOLLOWUP-REPORT.md`) has since closed that
+gap: over-length path parameters now return the application's own `400 VALIDATION_ERROR`
+envelope via `routerOptions.onMaxParamLength` (`src/app.ts`), not Fastify's `414`. The AC-011
+row below is updated accordingly; the original 2026-10-14 qualification text is retained
+immediately after it as historical record, not deleted, since it was accurate for the state
+it described.
 
-Gate at the time of writing (re-run live for this document):
+Original (2026-10-14) qualification, retained as history: AC-011 is partial because a
+101-character path parameter gets Fastify 414 before the planned 400/application-safe-error
+layer. The passing test records that observed difference; it does not make the original
+specification fully satisfied. Other rows retain the actor's scoped coverage classifications,
+not production guarantees.
+
+Gate at the time of original writing (2026-10-14):
 `npm ci && npm run check` → **187/187 tests passing** across 9 test files, clean typecheck, clean
 build. Raw output: `plans/EXP-003/evidence/P9-ci-check.txt`.
+
+Gate after the AC-011 follow-up (2026-10-15, re-run live for this update, then re-run again
+after the Phase 12 review's 2 fixes — see `plans/EXP-003/ac011-phase12-review-findings.md`):
+`npm ci && npm run check` → **204/204 tests passing** across the same 9 test files, clean
+typecheck, clean build, lockfile unchanged. Raw output (current):
+`plans/EXP-003/evidence/AC011-ci-check.txt`. 203 was the correct intermediate count between
+the Phase 8 and Phase 12 fixes; 204 is current.
 
 Status legend: **Full** = implemented and directly tested. **Partial** = implemented, tested only
 indirectly or narrowly. **Limitation** = intentionally not implemented / out of scope, documented.
@@ -88,7 +105,7 @@ indirectly or narrowly. **Limitation** = intentionally not implemented / out of 
 | AC-008 | Decided expenses cannot be employee-deleted; stable retention-policy 409 | `src/policy.ts:118-121` (`EXPENSE_RETENTION_LOCKED`) | `tests/lifecycle.test.ts:402` | Full |
 | AC-009 | Owner restoration during 30 days, one audit event, idempotent replay | `src/policy.ts:130-158`; `src/expense-service.ts:420-428` | `tests/lifecycle.test.ts:422` (restore succeeds, one event); `:80` (#2 replay) | Full |
 | AC-010 | Injected-clock retention tests immediately before, at and after 30 days | `src/policy.ts:146-158` (`isRestoreWindowOpen`) | `tests/policy.test.ts:339,343,351,359` (elapsed=0, 30d-1ms, exactly 30d, 30d+1ms); `tests/lifecycle.test.ts:180` (#6, both boundaries live, same expense) | Full |
-| AC-011 | Invalid/missing simulated-auth headers, idempotency keys, payloads and identifiers produce stable safe errors | `src/actor.ts:31-35`; `src/schemas.ts:26-46`; `src/errors.ts` (catalog + `bodyParserErrorResult:144-176`) | `tests/access.test.ts:58-430` (full authentication/validation block, incl. no-echo sentinel check at `:430`); `tests/errors.test.ts` (entire file, every S5.7 mapping row; route-level 401 precedence is in access.test.ts) | Partial (router414 exception; see close-out) |
+| AC-011 | Invalid/missing simulated-auth headers, idempotency keys, payloads and identifiers produce stable safe errors | `src/actor.ts:31-35`; `src/schemas.ts:26-46`; `src/errors.ts` (catalog + `bodyParserErrorResult:144-176`); `src/app.ts` `routerOptions.onMaxParamLength` (AC-011 follow-up, 2026-10-15) | `tests/access.test.ts:58-430` (full authentication/validation block, incl. no-echo sentinel check at `:430`); `tests/access.test.ts` "router-level oversized-parameter rejection (AC-011 follow-up)" block (all 4 mutation routes, length boundaries, router-precedence over auth/key/body, unchanged-storage, HEAD no-body, encoded-length characterization); `tests/errors.test.ts` (entire file, every S5.7 mapping row; route-level 401 precedence is in access.test.ts) | **Full** (AC-011 follow-up closed the prior router-414 exception, 2026-10-15; see the AC-011 follow-up update above and historical close-out note it supersedes) |
 | AC-012 | Neutral starter deliberately migrated/preserved; any compatibility break documented | `src/database.ts:72-119` (`MIGRATIONS`, `migrate`); `docs/EXP-003-COMPATIBILITY.md` (breaks 1-8) | `tests/migration.test.ts` (entire file, 7 cases); `tests/app.test.ts` (6 migrated baseline cases) | Full |
 | AC-013 | Clean `npm ci` and full typecheck/unit/integration/build suite pass | N/A (process requirement) | `plans/EXP-003/evidence/P9-ci-check.txt` (187/187 passing, clean typecheck/build, re-confirmed live by this validation pass on 2026-10-14) | Full |
 | AC-014 | Review maps every requirement to code/tests, with misses/corrections/limits recorded | N/A (process requirement) | This file, plus Part 3 below | Full (this document) |

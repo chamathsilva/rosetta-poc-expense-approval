@@ -1,0 +1,70 @@
+Preserved per coordinator instruction, 2026-10-15 (reconstructed from the actual
+terminal output captured in this session's transcript before `AC011-check.txt` was
+overwritten by the passing re-run; not a re-synthesized/approximate log).
+
+This file preserves two distinct mistakes made while authoring the new AC-011 tests,
+both already disclosed inline in the conversation at the time they occurred, neither
+touching `src/`:
+
+====================================================================
+Mistake 1 — typecheck failure (exactOptionalPropertyTypes), first test-authoring pass
+====================================================================
+Command: npm run check (typecheck step)
+
+tests/access.test.ts(444,45): error TS2345: Argument of type '{ method: "DELETE" | "GET" | "PATCH" | "POST"; url: string; headers: { "idempotency-key": string; }; payload: { status: string; } | undefined; }' is not assignable to parameter of type 'string | InjectOptions'.
+  Type '{ method: "DELETE" | "GET" | "PATCH" | "POST"; url: string; headers: { "idempotency-key": string; }; payload: { status: string; } | undefined; }' is not assignable to type 'InjectOptions' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+    Types of property 'payload' are incompatible.
+      Type '{ status: string; } | undefined' is not assignable to type 'InjectPayload'.
+        Type 'undefined' is not assignable to type 'InjectPayload'.
+tests/access.test.ts(454,27): error TS2339: Property 'statusCode' does not exist on type 'void & Promise<Response> & Chain'.
+tests/access.test.ts(455,27): error TS2339: Property 'json' does not exist on type 'void & Promise<Response> & Chain'.
+tests/access.test.ts(461,18): error TS7053: Element implicitly has an 'any' type because expression of type '"content-type"' can't be used to index type '(headers: IncomingHttpHeaders | OutgoingHttpHeaders) => Chain'.
+  Property 'content-type' does not exist on type '(headers: IncomingHttpHeaders | OutgoingHttpHeaders) => Chain'.
+CHECK_EXIT=1
+
+Root cause: the it.each table returned an object literal including an unconditional
+`payload` key set to `undefined` under `exactOptionalPropertyTypes: true`, which
+`inject()`'s typing rejects; this made TS infer the wrong overload for the whole
+`request` object, cascading into the later property-access errors.
+
+Fix applied: restructured the it.each row shape to pass `method`/`buildUrl`/`payload`
+as separate columns, and built the `inject()` call conditionally (branch with vs.
+without a `payload` key) instead of ever passing `payload: undefined`. Re-verified
+clean via `npx tsc -p tsconfig.test.json --noEmit` (no output = clean).
+
+====================================================================
+Mistake 2 — wrong behavioral assumption, encoded-path-length test
+====================================================================
+Command: npm run check (test step)
+
+ FAIL  tests/access.test.ts > access control > authentication and validation (P7.3) > router-level oversized-parameter rejection (AC-011 follow-up) > characterizes percent-encoded path length: a param that decodes to 100 chars but is longer encoded is measured on the raw segment
+AssertionError: expected 404 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 404
+
+ ❯ tests/access.test.ts:630:37
+    628|         // router-rejected at 400 — documenting actual behavior, not a…
+    629|         // URL-normalization policy.
+    630|         expect(response.statusCode).toBe(400);
+    631|         expect(response.json().error.code).toBe("VALIDATION_ERROR");
+
+ Test Files  1 failed | 8 passed (9)
+      Tests  1 failed | 201 passed (202)
+CHECK_EXIT=1
+
+Root cause: the test's own comment asserted, without having verified it, that
+find-my-way's `maxParamLength` check measures the raw (still-percent-encoded) path
+segment. The real, observed behavior is that it measures the decoded segment: a
+101-raw-char / 67-decoded-char id was NOT router-rejected, and fell through to the
+ordinary 404 EXPENSE_NOT_FOUND path. This is exactly the kind of unverified
+assumption the plan's acceptance item 6 ("characterize actual router selection
+without introducing URL normalization or new endpoint policy") was written to
+catch — the test was asserting a policy belief, not an observed fact.
+
+Fix applied: rewrote the test's expectation and comments to match the observed
+404/EXPENSE_NOT_FOUND behavior, removed the unverified "raw segment" claim. Not
+yet independently re-reviewed — flagged for the Phase 8 reviewer.

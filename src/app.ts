@@ -39,7 +39,31 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     idFactory,
     now
   });
-  const app = Fastify({ logger: options.logger ?? false });
+  const app = Fastify({
+    logger: options.logger ?? false,
+    routerOptions: {
+      // AC-011 follow-up: find-my-way rejects an over-length route param
+      // (>100 chars) before auth, body parsing, or the actor hook run —
+      // a narrow pre-authentication exception to the 401-precedence rule.
+      // Replace the framework default 414 with the same safe 400
+      // VALIDATION_ERROR envelope the app uses elsewhere, without echoing
+      // the submitted path. See docs/EXP-003-COMPATIBILITY.md.
+      onMaxParamLength: (_path, req, res) => {
+        res.statusCode = 400;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+
+        // This callback writes directly to the raw response, bypassing
+        // Fastify's normal reply pipeline (which strips bodies for HEAD).
+        // Mirror that HTTP semantic explicitly rather than always writing
+        // a body, found via Phase 8 review of this follow-up.
+        if (req.method === "HEAD") {
+          res.end();
+        } else {
+          res.end(JSON.stringify(errorBody("VALIDATION_ERROR")));
+        }
+      }
+    }
+  });
 
   app.addHook("onClose", () => {
     database.close();

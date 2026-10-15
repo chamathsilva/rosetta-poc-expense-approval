@@ -10,12 +10,23 @@ Style: terse bullets with keywords and references; DRY, link to `docs/CONTEXT.md
 
 ## Baseline State
 
-- Neutral expense-approval seed (commit `34f08e4`, 2026-09-15; confirmed on remote at tag `expense-seed-v1`); `src/` now diverges from the seed per the EXP-003 workstream below, the six seed cases have been migrated and the final suite contains187 passing cases across9 test files.
+- Neutral expense-approval seed (commit `34f08e4`, 2026-09-15; confirmed on remote at tag `expense-seed-v1`); `src/` now diverges from the seed per the workstreams below. The six seed cases are migrated; the current suite contains204 passing cases across9 files. Original EXP-003 validation contained187 cases.
 - Endpoints: health, create, list, read, decide (approve/reject once); contract in `docs/BASELINE-API.md`. EXP-003 adds delete/restore and tenant/role scoping; see `docs/EXP-003-COMPATIBILITY.md`.
 - Fastify 5 + Zod 4 + `node:sqlite` persistence; structure in `docs/ARCHITECTURE.md`.
 - **Test-count note (2026-10-14, Pass 2/Phase 13 final):** Phase 11 (PLAN P6/P7) wrote and ran the EXP-003 feature test suite (`tests/policy.test.ts`, `tests/access.test.ts`, `tests/audit.test.ts`, `tests/lifecycle.test.ts`, `tests/migration.test.ts`, `tests/errors.test.ts`, `tests/sqlite-runtime.test.ts`, `tests/fingerprint.test.ts`, `tests/support.ts`) plus the migrated `tests/app.test.ts`. Phase 12 (Review Tests) found one Major gap (missing 401-precedence tests for oversize/unsupported-media-type bodies, PLAN P7.8) and it was fixed, raising the suite from 185 to 187 tests. Phase 13 final validation re-ran `npm ci && npm run check` under the pin (Node v24.21.0/npm 11.6.2): **187/187 tests passing** across 9 test files, clean typecheck, clean build. Evidence: `plans/EXP-003/evidence/P9-ci-check.txt`. Full requirement-to-test traceability: `plans/EXP-003/EXP-003-REQUIREMENT-MAP.md`.
 
 ## Major Implemented Workstreams
+
+### AC-011 router error correction: validated locally, 2026-10-15
+
+- Dedicated oversized-parameter callback: safe400 envelope, no submitted-path echo, no HEAD body;
+  unchanged100-character decoded parameter limit. Router rejection precedes auth/body/key checks.
+- Native code/test review findings corrected;204 tests, typecheck/build and clean-install check
+  pass. Coordinator independently confirmed the final gate. Source change limited to app.ts;
+  tests changed only in access.test.ts. No dependency/schema/policy changes.
+- Plan and implementation approvals recorded; commit/publication pending. Report:
+  `plans/EXP-003/AC-011-FOLLOWUP-REPORT.md`. Earlier permission-mode and sequencing deviations
+  remain disclosed; the original51d282b partial result is preserved.
 
 ### EXP-003 tenancy, RBAC, audit, idempotency, lifecycle (Phase 7 implementation; P8 Pass 1 docs): 2026-10-14
 
