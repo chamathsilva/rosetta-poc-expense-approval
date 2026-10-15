@@ -10,7 +10,8 @@ The skill does not explicitly require same-terminal approval. The approval-recor
 record-only; implementation subsequently ran on coordinator resumption. Current status:
 implemented and reviewed; Phase10 human implementation approval received; remaining native
 review/validation complete with204 tests/typecheck/build passing. Coordinator verification
-also passes204. Local commit is authorized; push/publication remains pending. See AC-011-FOLLOWUP-REPORT.md and the
+also passes204. Correction3939cb6 is published; fresh public-clone install/check also passes204.
+See AC-011-FOLLOWUP-MANIFEST.md for publication verification, AC-011-FOLLOWUP-REPORT.md and the
 ignored ledger for chronology and qualifications.
 
 ## Historical resume attempt — 2026-10-15 (resolved by direct approval above)

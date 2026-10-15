@@ -1,16 +1,18 @@
-# AC-011 follow-up supplemental manifest — publication pending
+# AC-011 follow-up supplemental manifest — published correction
 
 Date: 2026-10-15. Target: `chamathsilva/rosetta-poc-expense-approval`.
 Existing branch: `experiment/EXP-003`. Parent/original published checkpoint:
 `51d282b7879d01c771e6b56401005b5b7978e374`.
-Follow-up commit: the Git revision containing this manifest; its exact SHA is recorded in the
-evaluation repository after commit. Remote publication/verification remains pending.
+Correction commit: [`3939cb6fdd63d6c2e2a5b5723308beb391074d49`](https://github.com/chamathsilva/rosetta-poc-expense-approval/commit/3939cb6fdd63d6c2e2a5b5723308beb391074d49).
+Its exact bytes were pushed normally and verified against the remote experiment ref on2026-10-15.
+This later documentation-only revision records publication without changing the tested code.
 No new tag, main update, merge or PR.
 
 This is one bounded corrective follow-up, not a new experiment or replacement for the initial
 partial AC-011 result. Human plan/implementation approvals are recorded; remaining validation
-is complete. The author authorized local commits on2026-10-15; pushing remains a separate
-step. Do not mark this manifest published yet.
+is complete. The author separately authorized pushing and pre-article close-out on2026-10-15.
+The frozen pre-push report below retains its historical local-only status wording; this manifest
+supersedes that publication status, not its findings or integrity hash.
 
 ## Runtime and execution
 
@@ -57,14 +59,23 @@ Public copies replace local checkout/toolchain paths and omit timing fields. Ori
 remain private. No product/test code was sanitized or improved by Codex. Runtime databases,
 dependencies/build outputs, caches, account details and unrelated data are excluded.
 
-## Remaining publication checks
+## Publication verification
 
-Chamath author/committer and active GitHub identity were verified for the local-commit step.
-The coordinator records the resulting exact SHA and private verified bundle in evaluation
-evidence. Before pushing, reconfirm the publication decision/identity; push the correction
-normally and record remote verification. Keep expense seed/main refs and original manifests
-fixed. This manifest's containing revision identifies the local code checkpoint without a
-self-referential embedded commit hash.
+Chamath author/committer, active GitHub account `chamathsilva`, and the `chamath` SSH alias were
+reverified before the push. No account or global configuration change was made. A fresh clone
+from the public experiment branch at3939cb6, with no copied dependencies or ignored state,
+passed pinned `npm ci` and `npm run check`:204 tests/9 files, source/test typecheck and build.
+Its source/test hashes match the table above and its tracked tree remained clean. The same
+three dependency advisories remain; no automatic fix was applied. This verifies project
+reproduction, not clean-clone agent approval recovery or a live-socket security audit.
+
+Remote expense main and seed peel remain `34f08e4e5d5d3a0fd4df587f1efdf8dc1c9c2536`;
+the annotated seed tag object remains `5a3244fbfa5565a382be418b7a153feab49840cd`.
+No force push, new acceptance tag, main update, merge or PR. Original manifests stay fixed.
+The local-only complete-history bundle for3939cb6 was verified; SHA256:
+`0bda843c67b219bd0ae244b95d3a5f95238f0211f93073ba461890a240411384`.
+Privacy scans and manual inventory review exclude raw transcripts, account metadata and local
+paths. Pattern scans supplement review; they are not a guarantee of secret absence.
 
 Passing the correction does not remove the original workflow, artifact-quality and runtime
 findings. This POC remains header-auth simulation with the other documented limitations.

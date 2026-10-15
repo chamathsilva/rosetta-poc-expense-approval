@@ -17,14 +17,15 @@ Style: terse bullets with keywords and references; DRY, link to `docs/CONTEXT.md
 
 ## Major Implemented Workstreams
 
-### AC-011 router error correction: validated locally, 2026-10-15
+### AC-011 router error correction: published, 2026-10-15
 
 - Dedicated oversized-parameter callback: safe400 envelope, no submitted-path echo, no HEAD body;
   unchanged100-character decoded parameter limit. Router rejection precedes auth/body/key checks.
 - Native code/test review findings corrected;204 tests, typecheck/build and clean-install check
   pass. Coordinator independently confirmed the final gate. Source change limited to app.ts;
   tests changed only in access.test.ts. No dependency/schema/policy changes.
-- Plan and implementation approvals recorded; commit/publication pending. Report:
+- Plan and implementation approvals recorded; correction3939cb6 published and fresh public-clone
+  install/check passes204. Publication: `plans/EXP-003/AC-011-FOLLOWUP-MANIFEST.md`. Report:
   `plans/EXP-003/AC-011-FOLLOWUP-REPORT.md`. Earlier permission-mode and sequencing deviations
   remain disclosed; the original51d282b partial result is preserved.
 
