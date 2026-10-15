@@ -1,0 +1,20 @@
+Coordinator independent check, 2026-10-14 America/Chicago.
+Verified Node24.21.0/npm11.6.2; npm run check exited0.
+Typecheck output preceded the final tool-output chunk below and exited successfully.
+This rerun did not repeat npm ci; the actor's clean-install evidence is P9-ci-check.txt.
+Publication copy: local checkout path and timing lines omitted.
+
+
+> rosetta-poc-expense-approval@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.0 <repo>
+
+
+ Test Files  9 passed (9)
+      Tests  187 passed (187)
+
+
+> rosetta-poc-expense-approval@0.0.0 build
+> tsc -p tsconfig.json

@@ -14,17 +14,61 @@ The starter is a deliberately simple API. It supports:
 
 The immutable starting point for the expense case study and governance probes is the Git tag `expense-seed-v1`.
 
+## EXP-003: tenancy, roles, audit, idempotency, lifecycle
+
+The EXP-003 workstream extends the baseline above with a tenant/actor boundary, RBAC, an append-only audit log, idempotent mutations, and a delete/restore lifecycle. Full list of behavior changes from the baseline: [`docs/EXP-003-COMPATIBILITY.md`](docs/EXP-003-COMPATIBILITY.md).
+
+**Disclaimer: the headers below simulate a trusted upstream authentication layer. They are not production authentication** — any caller can forge them.
+
+Every `/expenses*` request requires three headers:
+
+| Header | Rule |
+|---|---|
+| `x-tenant-id` | 1-100 chars, `[A-Za-z0-9._-]` |
+| `x-user-id` | 1-100 chars, `[A-Za-z0-9._-]` |
+| `x-role` | one of `employee`, `manager`, `finance` |
+
+Role assumptions (fixed): only `employee` may create, delete or restore, and only its own expenses; only `manager`/`finance` may approve/reject, never their own expense; `manager` approval is capped at 100,000 cents, `finance` has no cap.
+
+Every create/decide/delete/restore call also requires an `Idempotency-Key` header (1-128 chars, `[A-Za-z0-9._:-]`) so a retried request replays the original result instead of repeating the effect.
+
+```bash
+# Create an expense (employee only; employeeId defaults to x-user-id if omitted)
+curl -X POST http://localhost:3000/expenses \
+  -H "x-tenant-id: tenant-a" -H "x-user-id: employee-1" -H "x-role: employee" \
+  -H "Idempotency-Key: create-1" -H "Content-Type: application/json" \
+  -d '{"description":"Conference registration","amountCents":12500,"currency":"USD"}'
+
+# Approve it (manager/finance only; reviewerId defaults to x-user-id)
+curl -X PATCH "http://localhost:3000/expenses/<expenseId>/decision" \
+  -H "x-tenant-id: tenant-a" -H "x-user-id: manager-1" -H "x-role: manager" \
+  -H "Idempotency-Key: decide-1" -H "Content-Type: application/json" \
+  -d '{"status":"APPROVED"}'
+
+# Delete a separate, still-SUBMITTED expense (owner only; decided expenses return409)
+curl -X DELETE "http://localhost:3000/expenses/<expenseId>" \
+  -H "x-tenant-id: tenant-a" -H "x-user-id: employee-1" -H "x-role: employee" \
+  -H "Idempotency-Key: delete-1"
+
+# Restore within 30 days of deletion (owner only; 409 after the window)
+curl -X POST "http://localhost:3000/expenses/<expenseId>/restore" \
+  -H "x-tenant-id: tenant-a" -H "x-user-id: employee-1" -H "x-role: employee" \
+  -H "Idempotency-Key: restore-1"
+```
+
 ## API
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/health` | Check API and database readiness. |
-| `POST` | `/expenses` | Create a submitted expense. |
-| `GET` | `/expenses` | List all expenses. |
-| `GET` | `/expenses/:expenseId` | Read one expense. |
-| `PATCH` | `/expenses/:expenseId/decision` | Approve or reject a submitted expense. |
+| `GET` | `/health` | Static liveness response (unauthenticated; no database query). |
+| `POST` | `/expenses` | Create a submitted expense (employee only). |
+| `GET` | `/expenses` | List expenses, tenant- and role-scoped; tombstones hidden. |
+| `GET` | `/expenses/:expenseId` | Read one expense (tenant/role/tombstone-scoped). |
+| `PATCH` | `/expenses/:expenseId/decision` | Approve or reject a submitted expense (manager/finance only). |
+| `DELETE` | `/expenses/:expenseId` | Tombstone a submitted expense (owner only). |
+| `POST` | `/expenses/:expenseId/restore` | Restore a tombstoned expense within 30 days (owner only). |
 
-See [Baseline API](docs/BASELINE-API.md) for request and response examples.
+See [Baseline API](docs/BASELINE-API.md) for the unauthenticated seed-era examples and [EXP-003 Compatibility](docs/EXP-003-COMPATIBILITY.md) for every behavior change from that baseline.
 
 ## Local development
 

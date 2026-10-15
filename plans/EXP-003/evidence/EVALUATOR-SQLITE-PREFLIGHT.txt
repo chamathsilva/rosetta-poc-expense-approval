@@ -1,0 +1,18 @@
+2026-10-14: evaluator-owned independent check, run under Node24.21.0/npm11.6.2.
+This does not complete the native Claude P0 step or constitute feature/test-suite acceptance.
+Command: verify both pinned versions, then node agents/TEMP/EXP-003/evaluator-sqlite-preflight.mjs
+Exit code: 0
+
+Evaluator independent SQLite preflight; no application imports or test-suite changes
+Node v24.21.0
+PASS DatabaseSync has no transaction method
+PASS isTransaction tracks BEGIN, COMMIT and ROLLBACK
+PASS Nested BEGIN throws while outer transaction remains open
+PASS RAISE(ABORT) throws Error and leaves transaction open
+PASS DDL and PRAGMA user_version roll back together
+PASS json_valid exists
+PASS ADD COLUMN NOT NULL DEFAULT preserves populated rows
+PASS Statement run changes is a number
+PASS BEFORE INSERT trigger sees an omitted column DEFAULT
+PASS Persistent trigger on second connection affects first connection writes
+RESULT PASS: all 10 runtime facts checked; native actor P0 remains pending

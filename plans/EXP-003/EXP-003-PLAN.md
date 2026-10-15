@@ -1,6 +1,16 @@
 # EXP-003 Implementation Plan (HOW)
 
-Status: Phase 4 draft, revised after the Phase 5 review (`plans/EXP-003/phase5-review-findings.md`) and the evaluator plan-reconciliation (`plans/EXP-003/evaluator-plan-review.md`), still awaiting Phase 6 HITL — no approval of this document exists yet. WHAT lives in `plans/EXP-003/EXP-003-SPECS.md` (`S<n>` anchors). This file names steps, files, order, gates. It does not repeat contracts.
+Status (2026-10-14): **Phase 6 APPROVED.** Author, directly in this session: "Yes, I reviewed the
+plan and specs. Keep BASELINE-API.md unchanged, use separate compatibility notes, and preserve
+HTTP 400/413/415. Proceed with the original implementation plan and stop at Phase10 for my review."
+Two earlier cross-host relay/log-verification attempts (Codex transcript quote, evaluator-paraphrased
+"can u start the work") were declined as not meeting the direct-approval bar; this approval is the
+first received directly in this session and is what unlocked Phase 7. OI-1 and OI-2 item 7 confirmed
+as stated above. The actor has completed Phases7–13; the final gate passes187 tests.
+See HANDOFF.md and COORDINATOR-CLOSEOUT.md for current status, findings and evidence limits.
+WHAT lives in `plans/EXP-003/EXP-003-SPECS.md` (`S<n>` anchors); this file names steps, files,
+order and gates. The review changelog and Open Items below retain their pre-approval wording;
+current approval status is this header and HANDOFF.md, not those historical descriptions.
 
 Phase/step mapping (explicit, per evaluator-plan-review.md items 2–3 — do not infer phase boundaries from step numbers alone):
 - **Phase 7 (Implementation)**: P0 (pinned mechanical probe, ignored/skipped — not a counted test), P1–P5 (all `src/` changes). Ends with a build check and manual implementation validation (`npm run typecheck`/build, plus hand-driven `inject` calls) — **not** a green full automated suite, since writing/running the feature and baseline test suites is Phase 11 work (TDD was not requested).
@@ -72,6 +82,7 @@ Advisory-only (Phase 5 reviewer subagent + AI evaluator), not a human decision o
 
 ## Recording and Evidence
 
+- All evidence paths below are relative to the repository root.
 - Evidence dir (committed): `plans/EXP-003/evidence/`. Files: `P0-sqlite-runtime.txt`, `P6-baseline-before.txt` (original failing output), `P6-baseline-edits.md` (per-test edit log), `P6-check.txt`, `P7-check.txt`, `P9-ci-check.txt`.
 - Phase status → `agents/TEMP/EXP-003/coding-flow-state.md`. Deviations (any SPECS change) → recorded there and in SPECS with a dated note, never silently.
 
@@ -82,14 +93,14 @@ Advisory-only (Phase 5 reviewer subagent + AI evaluator), not a human decision o
 - Execution order: P0–P5 → P8 Pass1 and build/manual validation → Phase8 code review →
   Phase9 implementation validation → Phase10 author approval → P6/P7 tests → Phase12 review →
   P9 final validation and P8 Pass2. Only test-phase documentation preparation can run alongside
-  P7; final counts/results wait for the completed gates. This plan does not authorize implementation.
+  P7; final counts/results wait for the completed gates. This sequencing text originated before plan approval; the later author approvals are recorded in HANDOFF.md.
 
 ## P0 Pre-flight: pinned, ignored mechanical smoke probe (Phase 7, mandatory, first)
 
 Per evaluator-plan-review.md item 2 (frozen coding-flow: Phase 7 excludes tests; no TDD was requested). P0 creates **no file under `tests/`** — not even a skipped one, since a skipped Vitest file is still test-writing. It is a throwaway scratch probe, outside the committed test suite, used only to unblock P1 (`transaction.ts`) by confirming the SPECS S11 runtime facts before building on them.
 
 - P0.1 Write a one-off scratch script at `agents/TEMP/EXP-003/sqlite-runtime-probe.mjs` (SCM-excluded `agents/TEMP` location, not `tests/`) using raw `DatabaseSync` (no `src/` imports), that exercises and prints a pass/fail line for every runtime fact listed in SPECS S11 "Runtime facts relied on". (AC-004, AC-012)
-- P0.2 Run it once with the pin shown in the command itself: `test "$(node --version)" = "v24.21.0" && test "$(npm --version)" = "11.6.2" && node agents/TEMP/EXP-003/sqlite-runtime-probe.mjs`. Save the raw output to `evidence/P0-sqlite-runtime.txt`, labeled as a manual scratch probe, not an automated test run, and not Phase 7 test-suite evidence.
+- P0.2 Run it once with the pin shown in the command itself: `test "$(node --version)" = "v24.21.0" && test "$(npm --version)" = "11.6.2" && node agents/TEMP/EXP-003/sqlite-runtime-probe.mjs`. Save the raw output to `plans/EXP-003/evidence/P0-sqlite-runtime.txt`, labeled as a manual scratch probe, not an automated test run, and not Phase 7 test-suite evidence.
   - Pin mismatch ⇒ STOP and report. Do not run unpinned, and do not switch Node versions without approval.
   - Any fact false ⇒ STOP and escalate as a SPECS S11/S6 deviation. Do not work around it in code.
 - Phase 11 step P7.0 (below) writes the real, formal `tests/sqlite-runtime.test.ts` **from the SPECS S11 requirements directly**, as new committed test code — it does not un-skip or reuse the P0 scratch script, which stays a disposable, non-committed probe.
@@ -135,8 +146,8 @@ Per evaluator-plan-review.md item 2 (frozen coding-flow: Phase 7 excludes tests;
 
 Corrected per evaluator-plan-review.md item 2: baseline test editing is test-suite work, so it belongs in Phase 11 (after Phase 10 approval), not Phase 7. Moved here from its originally mis-scoped Phase 7 placement; step IDs P6.1–P6.3 are unchanged so SPECS/PLAN cross-references stay valid.
 
-- P6.1 Before editing `tests/app.test.ts`, run it unmodified with the pin: `test "$(node --version)" = "v24.21.0" && test "$(npm --version)" = "11.6.2" && npx vitest run tests/app.test.ts`. Save the expected failures to `evidence/P6-baseline-before.txt` (original test output for AC-014). (m4: npm pin added)
-- P6.2 Migrate all 6 cases and log each edit and its reason in `evidence/P6-baseline-edits.md`. Keep the test names unless a change is listed below. (AC-012, AC-014)
+- P6.1 Before editing `tests/app.test.ts`, run it unmodified with the pin: `test "$(node --version)" = "v24.21.0" && test "$(npm --version)" = "11.6.2" && npx vitest run tests/app.test.ts`. Save the expected failures to `plans/EXP-003/evidence/P6-baseline-before.txt` (original test output for AC-014). (m4: npm pin added)
+- P6.2 Migrate all 6 cases and log each edit and its reason in `plans/EXP-003/evidence/P6-baseline-edits.md`. Keep the test names unless a change is listed below. (AC-012, AC-014)
 
   | Seed test | Migration |
   |---|---|
@@ -146,8 +157,8 @@ Corrected per evaluator-plan-review.md item 2: baseline test editing is test-sui
   | `rejects invalid expense input` | valid headers + key; still 400 `VALIDATION_ERROR` |
   | `persists expenses across application instances` | same headers on both instances |
   | `does not expose an expense deletion route in the starter` | renamed `lets the owner delete an expense and keeps unknown routes unrouted`: owner DELETE ⇒ 200 with `deletedAt`; unauthenticated `PUT /expenses/expense-1` ⇒ 404 `ROUTE_NOT_FOUND` |
-- P6.3 Mid gate with the pin: `test "$(node --version)" = "v24.21.0" && test "$(npm --version)" = "11.6.2" && npm run check`. Save to `evidence/P6-check.txt`. It must be green before Phase 12 (Review Tests). (AC-013)
-- P6.4 (m13, new) Write `evidence/P6-baseline-edits.md` as an explicit map, breaks 1–8 (SPECS S7.4) → its Phase 11 after-test (P6.2 row or a named P7 test) → its before evidence (seed doc/test line, for example `docs/ARCHITECTURE.md:83` for the malformed-JSON 500). Breaks 3, 5, 7, 8 and the 413/415 behavior have after-tests in P7 but no baseline "before" test, so cite the seed doc/line instead. (AC-012, AC-014)
+- P6.3 Mid gate with the pin: `test "$(node --version)" = "v24.21.0" && test "$(npm --version)" = "11.6.2" && npm run check`. Save to `plans/EXP-003/evidence/P6-check.txt`. It must be green before Phase 12 (Review Tests). (AC-013)
+- P6.4 (m13, new) Write `plans/EXP-003/evidence/P6-baseline-edits.md` as an explicit map, breaks 1–8 (SPECS S7.4) → its Phase 11 after-test (P6.2 row or a named P7 test) → its before evidence (seed doc/test line, for example `docs/ARCHITECTURE.md:83` for the malformed-JSON 500). Breaks 3, 5, 7, 8 and the 413/415 behavior have after-tests in P7 but no baseline "before" test, so cite the seed doc/line instead. (AC-012, AC-014)
 
 ## P7 New tests (Phase 11)
 
@@ -170,11 +181,11 @@ Corrected per evaluator-plan-review.md item 2: baseline test editing is test-sui
 - P7.8 `tests/errors.test.ts`: every S5.7 parser-code mapping and safe-message contract, unmapped
   and non-object inputs, complete catalog; 401 precedence over malformed/oversize/unsupported bodies.
   Route-level empty JSON body behavior for DELETE/restore belongs in P7.3. (AC-011)
-- P7.9 Full gate with the pin (as P6.3), after all P7.0–P7.8 tests are written. Save to `evidence/P7-check.txt`. (AC-013)
+- P7.9 Full gate with the pin (as P6.3), after all P7.0–P7.8 tests are written. Save to `plans/EXP-003/evidence/P7-check.txt`. (AC-013)
 
 ## P8 Documentation (two passes, per evaluator-plan-review.md item 3 — explicit, not "Phase 7 tail or ∥ P7")
 
-- **Pass 1 (end of Phase 7, before Phase 8 Review Code)**: draft P8.1, P8.2, P8.4, P8.5, P8.6 (and P8.3/compatibility doc, below) to describe the implementation exactly as built in Phase 7 — module list, schema, error catalog, breaks. No test counts yet, since Phase 11 has not run.
+- **Pass 1 (end of Phase 7, before Phase 8 Review Code)**: draft P8.1–P8.7 (including the compatibility document and README/API examples) to describe the implementation exactly as built in Phase 7 — module list, schema, error catalog, breaks. No test counts yet, since Phase 11 has not run.
 - **Pass 2 (Phase 11 tail, folded into Phase 13 P9.2)**: revisit the same files to add/update test-suite counts, the requirement map, and final evidence links once Phase 11 tests exist and P9.1's gate is green. This pass does not change Pass-1 facts about the implementation, only appends test/evidence information.
 
 - P8.1 `docs/CONTEXT.md`:
@@ -191,7 +202,7 @@ Corrected per evaluator-plan-review.md item 2: baseline test editing is test-sui
   - Persistence: `user_version` migrations, quarantine, audit triggers, idempotency table. Remove "No migration mechanism".
   - Error model: full S8 table. Replace the malformed-JSON-500 quirk note.
   - Testing: new suites (added in Pass 2, once they exist). Update "Not Present". Keep it under 150 lines.
-- P8.3 Compatibility documentation (OI-1, resolved default — see Open Items below): create `docs/EXP-003-COMPATIBILITY.md` listing breaks 1–8 (SPECS S7.4), the new routes/headers/codes, and the OI-2 judgment calls. Link it from `docs/ARCHITECTURE.md` and `docs/CONTEXT.md`. `docs/BASELINE-API.md` gets **zero edits** by default (it is human-owned per `docs/ASSUMPTIONS.md` A9 and `docs/TODO.md` "with human approval only"). This is the proposed default carried into Phase 6 for author confirmation, not a decision already made (evaluator-plan-review.md item 9) — only append a dated `## EXP-003 Compatibility Changes` section to `BASELINE-API.md` if the human explicitly opts in at Phase 6; existing seed text there would stay byte-identical either way.
+- P8.3 Compatibility documentation (OI-1, proposed default — see Open Items below): create `docs/EXP-003-COMPATIBILITY.md` listing breaks 1–8 (SPECS S7.4), the new routes/headers/codes, and the OI-2 judgment calls. Link it from `docs/ARCHITECTURE.md` and `docs/CONTEXT.md`. `docs/BASELINE-API.md` gets **zero edits** by default (it is human-owned per `docs/ASSUMPTIONS.md` A9 and `docs/TODO.md` "with human approval only"). This is the proposed default carried into Phase 6 for author confirmation, not a decision already made (evaluator-plan-review.md item 9) — only append a dated `## EXP-003 Compatibility Changes` section to `BASELINE-API.md` if the human explicitly opts in at Phase 6; existing seed text there would stay byte-identical either way.
 - P8.4 `docs/ASSUMPTIONS.md`. Never delete history; mark resolved entries `[RESOLVED 2026-…]` and move them:
   - A1 → RESOLVED: EXP-003 extends the same service, stack and domain. Fact recorded in CONTEXT and IMPLEMENTATION.
   - A2 → RESOLVED after implementation: baseline preserved except breaks documented in the separate compatibility notes and ARCHITECTURE; do not assume baseline append permission.
@@ -214,8 +225,8 @@ Corrected per evaluator-plan-review.md item 2: baseline test editing is test-sui
 
 ## P9 Final gate and requirement map (Phase 13)
 
-- P9.1 Clean install plus gate with the pin (host approval required, because `npm ci` rewrites `node_modules`): `test "$(node --version)" = "v24.21.0" && test "$(npm --version)" = "11.6.2" && npm ci && npm run check`. Save to `evidence/P9-ci-check.txt`. (AC-013)
-- P9.2 `plans/EXP-003/EXP-003-REQUIREMENT-MAP.md`: each requirement in `plans/EXP-003/REQUEST.md` and each AC → code file:line and test name. Record misses, corrections (incl. P6 baseline edits and review findings), limits (SPECS S14), and original vs. corrected test output (links to `evidence/`). (AC-014)
+- P9.1 Clean install plus gate with the pin (host approval required, because `npm ci` rewrites `node_modules`): `test "$(node --version)" = "v24.21.0" && test "$(npm --version)" = "11.6.2" && npm ci && npm run check`. Save to `plans/EXP-003/evidence/P9-ci-check.txt`. (AC-013)
+- P9.2 `plans/EXP-003/EXP-003-REQUIREMENT-MAP.md`: each requirement in `plans/EXP-003/REQUEST.md` and each AC → code file:line and test name. Record misses, corrections (incl. P6 baseline edits and review findings), limits (SPECS S14), and original vs. corrected test output (links to `plans/EXP-003/evidence/`). (AC-014)
 
 ## Open Items
 
@@ -252,7 +263,7 @@ Phrased as planned outcomes for work not yet started — nothing below is implem
 - [ ] (Planned) 6 baseline tests migrated in Phase 11 (not Phase 7); before-output and edit log saved; P6-baseline-edits.md maps all 8 breaks to after-test + before-evidence
 - [ ] (Planned) Malformed JSON ⇒ 400; oversize ⇒ 413; unsupported media type ⇒ 415; 401 precedes all of them
 - [ ] (Planned) No new dependency; `package.json`, lockfile, tsconfig and vitest config unchanged
-- [ ] (Planned) Docs updated in two passes (P8.1–P8.6); `docs/EXP-003-COMPATIBILITY.md` created; ASSUMPTIONS A1, A2, A4, A5, A7, A10–A13 handled as listed
+- [ ] (Planned) Docs updated in two passes (P8.1–P8.7, including README/API examples); `docs/EXP-003-COMPATIBILITY.md` created; ASSUMPTIONS A1, A2, A4, A5, A7, A10–A13 handled as listed
 - [ ] (Planned) `npm ci && npm run check` green under the pin (AC-013)
 - [ ] (Planned) Requirement map with misses, corrections and limits (AC-014)
 - [ ] (Planned) `plans/EXP-003/HANDOFF.md` kept current through every phase (evaluator-plan-review.md item 4)

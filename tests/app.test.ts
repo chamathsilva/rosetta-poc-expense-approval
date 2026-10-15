@@ -1,34 +1,19 @@
-import { mkdtempSync } from "node:fs";
-import { rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import type { FastifyInstance } from "fastify";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { buildApp } from "../src/app.js";
+import { actorHeaders, createTestRegistry } from "./support.js";
 
-const openApps: FastifyInstance[] = [];
-const temporaryDirectories: string[] = [];
+const { createTestApp, createTempDatabasePath } = createTestRegistry();
 
-function createTestApp(databasePath = ":memory:"): FastifyInstance {
-  let nextId = 1;
-  let nextSecond = 0;
+const EMPLOYEE = { tenantId: "tenant-a", userId: "employee-1", role: "employee" as const };
+const MANAGER = { tenantId: "tenant-a", userId: "reviewer-1", role: "manager" as const };
+const FINANCE = { tenantId: "tenant-a", userId: "reviewer-2", role: "finance" as const };
 
-  const app = buildApp({
-    databasePath,
-    idFactory: () => `expense-${nextId++}`,
-    now: () => `2026-09-15T12:00:${String(nextSecond++).padStart(2, "0")}.000Z`
-  });
-
-  openApps.push(app);
-  return app;
-}
-
-async function createExpense(app: FastifyInstance) {
+async function createExpense(app: FastifyInstance, key = "create-key-1") {
   return app.inject({
     method: "POST",
     url: "/expenses",
+    headers: { ...actorHeaders(EMPLOYEE), "idempotency-key": key },
     payload: {
       employeeId: "employee-1",
       description: "Conference registration",
@@ -38,18 +23,9 @@ async function createExpense(app: FastifyInstance) {
   });
 }
 
-afterEach(async () => {
-  await Promise.all(openApps.splice(0).map((app) => app.close()));
-  await Promise.all(
-    temporaryDirectories.splice(0).map((directory) =>
-      rm(directory, { recursive: true, force: true })
-    )
-  );
-});
-
-describe("expense starter API", () => {
+describe("expense starter API (migrated baseline, P6)", () => {
   it("reports database readiness", async () => {
-    const app = createTestApp();
+    const { app } = createTestApp();
     const response = await app.inject({ method: "GET", url: "/health" });
 
     expect(response.statusCode).toBe(200);
@@ -57,13 +33,14 @@ describe("expense starter API", () => {
   });
 
   it("creates, reads, and lists an expense", async () => {
-    const app = createTestApp();
+    const { app } = createTestApp();
     const created = await createExpense(app);
 
     expect(created.statusCode).toBe(201);
     expect(created.json()).toEqual({
       expense: {
         id: "expense-1",
+        tenantId: "tenant-a",
         employeeId: "employee-1",
         description: "Conference registration",
         amountCents: 12500,
@@ -72,15 +49,21 @@ describe("expense starter API", () => {
         reviewerId: null,
         decisionNote: null,
         createdAt: "2026-09-15T12:00:00.000Z",
-        updatedAt: "2026-09-15T12:00:00.000Z"
+        updatedAt: "2026-09-15T12:00:00.000Z",
+        deletedAt: null
       }
     });
 
     const read = await app.inject({
       method: "GET",
-      url: "/expenses/expense-1"
+      url: "/expenses/expense-1",
+      headers: actorHeaders(EMPLOYEE)
     });
-    const listed = await app.inject({ method: "GET", url: "/expenses" });
+    const listed = await app.inject({
+      method: "GET",
+      url: "/expenses",
+      headers: actorHeaders(EMPLOYEE)
+    });
 
     expect(read.json()).toEqual(created.json());
     expect(listed.json()).toEqual({
@@ -89,12 +72,13 @@ describe("expense starter API", () => {
   });
 
   it("approves a submitted expense once", async () => {
-    const app = createTestApp();
+    const { app } = createTestApp();
     await createExpense(app);
 
     const approved = await app.inject({
       method: "PATCH",
       url: "/expenses/expense-1/decision",
+      headers: { ...actorHeaders(MANAGER), "idempotency-key": "decide-key-1" },
       payload: {
         status: "APPROVED",
         reviewerId: "reviewer-1",
@@ -113,6 +97,7 @@ describe("expense starter API", () => {
     const repeated = await app.inject({
       method: "PATCH",
       url: "/expenses/expense-1/decision",
+      headers: { ...actorHeaders(FINANCE), "idempotency-key": "decide-key-2" },
       payload: {
         status: "REJECTED",
         reviewerId: "reviewer-2"
@@ -121,13 +106,22 @@ describe("expense starter API", () => {
 
     expect(repeated.statusCode).toBe(409);
     expect(repeated.json().error.code).toBe("EXPENSE_ALREADY_DECIDED");
+
+    const reread = await app.inject({
+      method: "GET",
+      url: "/expenses/expense-1",
+      headers: actorHeaders(MANAGER)
+    });
+
+    expect(reread.json().expense.updatedAt).toBe("2026-09-15T12:00:01.000Z");
   });
 
   it("rejects invalid expense input", async () => {
-    const app = createTestApp();
+    const { app } = createTestApp();
     const response = await app.inject({
       method: "POST",
       url: "/expenses",
+      headers: { ...actorHeaders(EMPLOYEE), "idempotency-key": "bad-create-key" },
       payload: {
         employeeId: "",
         description: "",
@@ -141,19 +135,17 @@ describe("expense starter API", () => {
   });
 
   it("persists expenses across application instances", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "expense-seed-"));
-    const databasePath = join(directory, "expenses.sqlite");
-    temporaryDirectories.push(directory);
+    const databasePath = createTempDatabasePath();
 
-    const firstApp = createTestApp(databasePath);
+    const { app: firstApp } = createTestApp({ databasePath });
     await createExpense(firstApp);
     await firstApp.close();
-    openApps.splice(openApps.indexOf(firstApp), 1);
 
-    const secondApp = createTestApp(databasePath);
+    const { app: secondApp } = createTestApp({ databasePath });
     const response = await secondApp.inject({
       method: "GET",
-      url: "/expenses/expense-1"
+      url: "/expenses/expense-1",
+      headers: actorHeaders(EMPLOYEE)
     });
 
     expect(response.statusCode).toBe(200);
@@ -162,17 +154,26 @@ describe("expense starter API", () => {
     );
   });
 
-  it("does not expose an expense deletion route in the starter", async () => {
-    const app = createTestApp();
+  it("lets the owner delete an expense and keeps unknown routes unrouted", async () => {
+    const { app } = createTestApp();
     await createExpense(app);
 
-    const response = await app.inject({
+    const deleted = await app.inject({
       method: "DELETE",
+      url: "/expenses/expense-1",
+      headers: { ...actorHeaders(EMPLOYEE), "idempotency-key": "delete-key-1" }
+    });
+
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json().expense.deletedAt).toBe("2026-09-15T12:00:01.000Z");
+
+    const unrouted = await app.inject({
+      method: "PUT",
       url: "/expenses/expense-1"
     });
 
-    expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({
+    expect(unrouted.statusCode).toBe(404);
+    expect(unrouted.json()).toEqual({
       error: {
         code: "ROUTE_NOT_FOUND",
         message: "Route not found"

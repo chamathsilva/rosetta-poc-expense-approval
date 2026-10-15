@@ -1,0 +1,29 @@
+Coordinator extraction of the first native main-session tool result containing185 passing tests.
+Original privately retained transcript SHA256: c065973523ec74b7bdba3ec546647a74bfafbaeb78c49c9c67c62d89eedf716c
+Local path and test-timing lines omitted; result is historical, not a new run.
+
+PIN OK
+
+> rosetta-poc-expense-approval@0.0.0 check
+> npm run typecheck && npm test && npm run build
+
+
+> rosetta-poc-expense-approval@0.0.0 typecheck
+> tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit
+
+
+> rosetta-poc-expense-approval@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.0 <repo>
+
+
+ Test Files  9 passed (9)
+      Tests  185 passed (185)
+
+
+> rosetta-poc-expense-approval@0.0.0 build
+> tsc -p tsconfig.json
+
+EXIT=0

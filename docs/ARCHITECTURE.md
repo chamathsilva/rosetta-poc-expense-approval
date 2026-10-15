@@ -6,81 +6,95 @@ Style: terse bullets and tables, grep-friendly `##` headers, describe structure 
 
 ## Overview
 
-- Single repository, single service: one Fastify HTTP API process with an embedded SQLite file database.
+- Single repository, single service: one Fastify HTTP API process with an embedded SQLite file database. Single process only (`src/transaction.ts` synchronous `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK`; no horizontal scaling, no concurrent writers beyond this process).
 - Small layered design, no framework plugins, no DI container; dependencies passed through `buildApp(options)`.
-- Layers: entry point -> app factory (routes, validation, error mapping) -> repository -> SQLite.
+- Layers: entry point -> actor hook -> app factory (thin routes) -> `ExpenseService` (one transaction per mutation) -> pure `policy.ts` -> tenant-scoped repositories -> SQLite.
 
 ```
-server.ts --(env)--> buildApp() in app.ts --> schemas.ts (Zod validation)
-                                          --> ExpenseRepository --> database.ts (node:sqlite) --> expenses table
-                                          --> domain.ts types shared by repository and app
+server.ts --(env)--> buildApp() in app.ts
+  --> registerActorHook (actor.ts) ──(401)
+  --> routes: schemas.ts parse ──(400/413/415)
+        --> ExpenseService (expense-service.ts)
+              --> policy.ts (pure)                 ──(403/404-visibility/409)
+              --> transaction.ts withTransaction
+              --> ExpenseRepository                ──(404 tenant existence)
+              --> AuditRepository (append-only)
+              --> IdempotencyRepository + requestFingerprint ──(replay/409)
+  --> setErrorHandler (errors.ts)
+  --> database.ts openDatabase + migrate (user_version)
 ```
 
 ## Workspace Structure
 
-- `src/`: application source (6 modules, below). Built to `dist/` (gitignored).
-- `tests/`: Vitest integration suite.
-- `docs/`: project and Rosetta documentation. `agents/`: Rosetta agent state, memory, implementation log; `agents/TEMP/` is gitignored scratch.
+- `src/`: application source (13 modules, below). Built to `dist/` (gitignored).
+- `tests/`: Vitest suite (migrated/extended in a later pass; see Testing below).
+- `docs/`: project and Rosetta documentation. `agents/`: Rosetta agent state, memory, implementation log.
 - `data/`: default runtime database location (gitignored, created on demand).
-- Full file list: `docs/CODEMAP.md`. The initialization helper was ignored local tooling, not a committed clone dependency; regenerate through Rosetta's codemap workflow or repository file inventory.
+- Full file list: `docs/CODEMAP.md`.
 
 ## Modules
 
 | Module | Responsibility |
 |---|---|
-| `src/server.ts` | Process entry: validates env with Zod, builds app with logger on, listens, closes on SIGINT/SIGTERM. |
-| `src/app.ts` | `buildApp(options)` factory: opens DB, wires repository, registers routes, 404 and error handlers, error body helpers. |
-| `src/schemas.ts` | Zod strict schemas for create body, decision body, `expenseId` params; inferred input types. |
-| `src/domain.ts` | Status constants and domain types: `Expense`, `NewExpense`, `ExpenseDecision`. No logic. |
-| `src/expense-repository.ts` | `ExpenseRepository` (create, list, findById, decide) plus row mapping with runtime type guards. |
-| `src/database.ts` | `openDatabase(path)`: creates parent dir, opens `DatabaseSync`, applies schema idempotently. |
+| `src/server.ts` | Process entry: validates env with Zod, builds app, listens, closes on SIGINT/SIGTERM. |
+| `src/app.ts` | `buildApp(options)`: opens DB, wires 3 repositories + `ExpenseService`, registers actor hook, thin routes, 404/error handlers. |
+| `src/actor.ts` | Validates `x-tenant-id`/`x-user-id`/`x-role`, sets `request.actor` via an `onRequest` hook scoped to `/expenses*`; `requireActor` reads it. |
+| `src/policy.ts` | Pure functions: role capability, identity agreement, self-decision, approval limit, ownership, state preconditions, restore-window math. No I/O. |
+| `src/transaction.ts` | `withTransaction(db, work)`: `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK`; rejects nesting; compile-time `NotPromise<T>` plus a runtime thenable backstop reject async `work`. |
+| `src/expense-service.ts` | `ExpenseService`: one command per mutation (`create`/`decide`/`delete`/`restore`) plus `list`/`get`, each running its tier checks inside one transaction. |
+| `src/schemas.ts` | Zod strict schemas for create/decision/params bodies, empty mutation body, Idempotency-Key format; inferred input types. |
+| `src/domain.ts` | Types: `Actor`, `Role`, `Expense` (+ tombstone fields), `NewAuditEvent`/`AuditEvent`, `IdempotencyRecord`. No logic. |
+| `src/expense-repository.ts` | `ExpenseRepository`: every method tenant-scoped (`findInTenant`, `listVisible`, `create`, `decide`, `tombstone`, `restore`); no unscoped method remains. |
+| `src/audit-repository.ts` | `AuditRepository`: `append` (insert-only) and `listForExpense` (read, tests/review only). No update/delete method exists. |
+| `src/idempotency-repository.ts` | `IdempotencyRepository` (`find`/`save`, plain INSERT) plus `canonicalJson`/`requestFingerprint` (SHA-256 of a canonicalized request). |
+| `src/database.ts` | `openDatabase(path)`: creates parent dir, opens `DatabaseSync`, runs `migrate`. `migrate` applies `PRAGMA user_version`-gated steps. |
+| `src/errors.ts` | Error catalog (code/message/status), `errorBody`/`errorResult`/`validationError`, `bodyParserErrorResult` (exact Fastify-code allow-list mapping to 400/413/415). |
 
-## Request Flow
+## Request Pipeline
 
-- Route handler `safeParse`s params/body; failure -> 400 `VALIDATION_ERROR` before any DB access.
-- Single-resource routes: `findById` -> 404 if missing -> state precondition (409) -> mutate.
-- Repository returns domain objects; handlers wrap them as `{ expense }` or `{ expenses }`.
-- IDs come from `idFactory` (default `crypto.randomUUID`); timestamps from `now` (default `new Date().toISOString()`, UTC).
-
-## Composition and Test Seams
-
-- `BuildAppOptions`: `databasePath` (default `data/expenses.sqlite`), `idFactory`, `now`, `logger` (default off).
-- All non-determinism (ids, time, storage location) is injectable; tests rely on this.
-- DB connection lifetime = app lifetime; closed in Fastify `onClose` hook.
+- Fixed 9-tier error-priority order; first failing tier wins, each tier runs only if all earlier tiers passed. Full tier table and per-route applicability: `plans/EXP-003/EXP-003-SPECS.md` S4.
+- T1 actor headers (401) runs in `onRequest`, before body parsing, so an unauthenticated request with a malformed body still gets 401. T2 body-parse (400/413/415) and T3 schema/key (400) are syntax-only. T4 is tenant-bound existence (tombstone-blind, 404); T4b is ordinary visibility (tombstone-hiding + employee read-scope, 404) and applies only to `GET /:id`, list and decision — delete/restore skip T4b because they are tombstone-aware. T5 role capability (403), T6 identity/ownership/limit (403), T7 idempotency lookup (replay or 409), T8 state precondition (409), T9 guarded mutation + audit + idempotency save (500 on any throw, rollback).
+- `now()` is called exactly once per mutating command, as the first statement inside its transaction; `idFactory()` only at T9 of a fresh create.
 
 ## Persistence
 
-- Engine: Node built-in `node:sqlite` `DatabaseSync` (synchronous API, no npm driver, no ORM).
-- `:memory:` supported for ephemeral DBs; otherwise parent directory is created automatically.
-- Schema: one table `expenses` (snake_case columns), created with `CREATE TABLE IF NOT EXISTS` on every open.
-- DB-level `CHECK` constraints mirror domain rules: `amount_cents > 0`, `length(currency) = 3`, status in the three statuses.
-- Index `expenses_updated_at_idx (updated_at DESC, id ASC)` backs list ordering.
-- Timestamps stored as ISO-8601 TEXT; ordering relies on lexicographic order of UTC ISO strings.
-- No migration mechanism: schema changes to an existing table need an explicit strategy (see `docs/ASSUMPTIONS.md`).
-- Decision write is guarded: `UPDATE ... WHERE id = ? AND status = 'SUBMITTED'`; zero changed rows -> 409 `EXPENSE_DECISION_CONFLICT` (lost race after the pre-check).
-- Row mapping never casts blindly: `requiredString` / `nullableString` / `expenseStatus` throw on unexpected persisted data (surfaces as 500).
-- `PRAGMA foreign_keys = ON` is set although no foreign keys exist yet.
-
-## Validation
-
-- Request-body/params Zod objects use `.strict()` (unknown keys rejected), with trimmed string fields. Environment configuration is non-strict.
-- Validation lives only at the HTTP boundary (`schemas.ts`); repository trusts typed input; DB constraints are a second guard.
-- Environment config is also Zod-validated (`server.ts`).
+- Engine: Node built-in `node:sqlite` `DatabaseSync` (synchronous, no npm driver/ORM). `PRAGMA foreign_keys = ON`.
+- Schema versioned via `PRAGMA user_version` (`src/database.ts`): migration 0->1 is the verbatim seed DDL (`IF NOT EXISTS`, no-op on an already-seeded file); migration 1->2 adds `tenant_id`/`deleted_at`/`deleted_by` to `expenses`, plus `audit_events` and `idempotency_records`. Each step runs inside `withTransaction`, re-reads `user_version` under the write lock (so a second opener skips an already-applied step), and refuses to open a file with a newer `user_version` than this build supports (handle closed before rethrow).
+- Quarantine: pre-existing rows with no prior tenant get `tenant_id` from a column `DEFAULT 'legacy:seed'`. That value is unreachable as a real `x-tenant-id` (the identifier charset excludes `:`), so quarantined rows are preserved but invisible to every API caller. Hardened by trigger `expenses_no_quarantine_insert`, which aborts any later INSERT whose `tenant_id` resolves to `legacy:seed` — a loud failure (rollback + 500) instead of a silent landing in quarantine.
+- Audit: `audit_events` is append-only by trigger (`audit_events_no_update`/`audit_events_no_delete` both `RAISE(ABORT)`), FK `RESTRICT` additionally blocks deleting an expense with audit rows, and `audit_events_tenant_match` aborts an insert whose tenant disagrees with its expense's tenant.
+- Idempotency: `idempotency_records` PK `(tenant_id, actor_user_id, idempotency_key)`, `WITHOUT ROWID`; plain INSERT (no upsert) so a key collision throws rather than silently overwriting.
+- Timestamps stored as UTC ISO-8601 TEXT; load-bearing for both list ordering (lexicographic = chronological) and restore-window arithmetic (`Date.parse` difference), so an injected `now` must return UTC ISO.
+- Row mapping never casts blindly: typed-row-field-extraction guards throw on unexpected persisted data (surfaces as 500) across all three repositories.
 
 ## Error Model
 
-- Every error response: `{ error: { code, message, details? } }`; `details` (`[{ path, message }]`) only for validation errors.
+- Every error response: `{ error: { code, message, details? } }`; `details` only for Zod validation failures.
 
-| Code | HTTP | Source |
-|---|---|---|
-| `VALIDATION_ERROR` | 400 | Zod `safeParse` failure on params or body |
-| `EXPENSE_NOT_FOUND` | 404 | Unknown `expenseId` |
-| `ROUTE_NOT_FOUND` | 404 | Fastify not-found handler (any unregistered route/method) |
-| `EXPENSE_ALREADY_DECIDED` | 409 | Decision on non-`SUBMITTED` expense |
-| `EXPENSE_DECISION_CONFLICT` | 409 | Guarded update changed no rows |
-| `INTERNAL_ERROR` | 500 | Global error handler; hides error details from clients |
+| Code | HTTP | Tier | Source |
+|---|---|---|---|
+| `VALIDATION_ERROR` | 400 | T2/T3 | Zod failure, or body-parse mapping (fixed message, no details) |
+| `PAYLOAD_TOO_LARGE` | 413 | T2 | Body over Fastify's 1 MiB default limit |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | T2 | Content type with no parser |
+| `IDEMPOTENCY_KEY_REQUIRED` / `_INVALID` | 400 | T3 | Missing / malformed `Idempotency-Key` |
+| `UNAUTHENTICATED` | 401 | T1 | Missing/invalid actor headers |
+| `FORBIDDEN_ROLE` | 403 | T5 | Role lacks capability for the command |
+| `ACTOR_MISMATCH` | 403 | T6 | Body identity disagrees with the actor |
+| `SELF_DECISION_FORBIDDEN` | 403 | T6 | Actor decides its own expense |
+| `APPROVAL_LIMIT_EXCEEDED` | 403 | T6 | Manager approval over 100,000 cents |
+| `NOT_EXPENSE_OWNER` | 403 | T6 | Non-owner delete/restore (reachable) |
+| `EXPENSE_NOT_FOUND` | 404 | T4/T4b | Cross-tenant, tombstoned, or non-owned (employee) target |
+| `ROUTE_NOT_FOUND` | 404 | – | Unregistered route/method |
+| `IDEMPOTENCY_KEY_CONFLICT` | 409 | T7 | Same key, different fingerprint |
+| `EXPENSE_ALREADY_DECIDED` | 409 | T8 | Second decision attempt |
+| `EXPENSE_DECISION_CONFLICT` | 409 | T9 | Guarded decide update matched zero rows (backstop) |
+| `EXPENSE_RETENTION_LOCKED` | 409 | T8 | Delete attempt on a decided expense |
+| `EXPENSE_ALREADY_DELETED` | 409 | T8 | Fresh-key delete of an already-tombstoned expense |
+| `EXPENSE_NOT_DELETED` | 409 | T8 | Restore of a non-tombstoned (or non-SUBMITTED-tombstoned) expense |
+| `RESTORE_WINDOW_EXPIRED` | 409 | T8 | Restore attempted at/after the 30-day boundary |
+| `INTERNAL_ERROR` | 500 | T9/any | Unmapped thrown error (rollback; no detail leaked) |
 
-- Global error handler always replies 500 and ignores the thrown error's own status code; confirmed: malformed JSON body surfaces as 500, not 400. Known baseline quirk, not fixed (seed is frozen at tag `expense-seed-v1`).
+- Body-parser errors keep Fastify's native 4xx status (`src/errors.ts` `bodyParserErrorResult`, an exact-code allow-list), not a flattened 500 — this replaces the former "malformed JSON surfaces as 500" baseline quirk.
+- No stack, SQL, header values, idempotency-key values or body values are ever echoed; body key names may appear in a Zod strict-mode `details` message.
 
 ## Configuration
 
@@ -90,42 +104,27 @@ server.ts --(env)--> buildApp() in app.ts --> schemas.ts (Zod validation)
 | `HOST` | `127.0.0.1` | Listen address |
 | `PORT` | `3000` | Integer 1-65535 |
 
-- Invalid env throws at startup (fail fast). No config files, no secrets.
+- Invalid env throws at startup (fail fast). `BuildAppOptions` unchanged: `databasePath`, `idFactory`, `now`, `logger`.
 
 ## Health
 
-- `GET /health` returns static `{ status: "ok" }`; it does not query the DB. Readiness is implied by DB opening synchronously in `buildApp`.
+- `GET /health` returns static `{ status: "ok" }`, unauthenticated, unchanged from the seed.
 
 ## Testing
 
-- Vitest, one integration suite `tests/app.test.ts`; config `vitest.config.ts` (`tests/**/*.test.ts`, `clearMocks`).
-- Tests drive routes via `app.inject()` (no network socket), in-memory DB by default, deterministic `idFactory`/`now`.
-- File persistence is tested by closing/rebuilding app instances in the same process. No actual API-process restart test exists in the seed. Shared `afterEach` closes apps and removes owned temp dirs.
-- No mocks of internal modules; no separate repository unit tests; no coverage thresholds configured.
-- Covered: health, create/read/list, approve-once + 409, invalid create input, persistence, absent DELETE route.
-- New behavior: add cases to the same suite following `docs/PATTERNS/deterministic-fastify-inject-test.md`.
+- 9 test files, **187 tests passing** (Phase 11/13; gate evidence: `plans/EXP-003/evidence/P9-ci-check.txt`): `tests/app.test.ts` (6 migrated baseline cases), `tests/policy.test.ts` (pure `policy.ts` unit cases, incl. restore-window boundaries), `tests/access.test.ts` (authentication/validation + tenancy/decision-policy integration, incl. the S12.3 matrix cross-tenant rows), `tests/audit.test.ts` (exact audit payload/count per mutation, append-only triggers, 8-case F-A/F-I atomicity fault injection), `tests/lifecycle.test.ts` (S12.3 idempotency/tombstone/restore matrix), `tests/migration.test.ts` (schema v2, legacy quarantine, reopen/newer-version handling), `tests/errors.test.ts` (`bodyParserErrorResult` S5.7 mapping, full catalog), `tests/sqlite-runtime.test.ts` (S11 runtime facts + `withTransaction` contract + `NotPromise<T>` compile-time constraint), `tests/fingerprint.test.ts` (`canonicalJson`/`requestFingerprint`). Shared helpers in `tests/support.ts`.
+- Clean-install gate (`npm ci && npm run check`, pinned Node v24.21.0/npm 11.6.2): typecheck (src+tests) → `vitest run` → `tsc` build, all green. Full requirement-to-test traceability: `plans/EXP-003/EXP-003-REQUIREMENT-MAP.md`.
 
 ## Build and Quality Gate
 
-- `npm run check` = typecheck (src + tests) -> `vitest run` -> `tsc` build. This is the only quality gate.
-- Strict TypeScript (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`); ESM with NodeNext resolution, so relative imports use `.js` suffixes and type-only imports use `import type`.
-- No CI, linter, formatter, or container config (local-only POC). Formatting follows `.editorconfig` (2 spaces, LF).
-
-## Extending the Service (Change Path)
-
-1. Domain type/status in `src/domain.ts`.
-2. Strict Zod schema in `src/schemas.ts`.
-3. Table/column change in `src/database.ts` (mind missing migrations).
-4. Repository method in `src/expense-repository.ts` (prepared SQL and mapped reads; mutations currently include readback).
-5. Route in `src/app.ts` (safeParse -> find-or-404 -> precondition 409 -> mutate), errors via `errorBody`.
-6. Integration test in `tests/app.test.ts`; run `npm run check`.
-- Patterns for each step: `docs/PATTERNS/INDEX.md`.
+- `npm run check` = typecheck (src + tests) -> `vitest run` -> `tsc` build. No new dependency; `package.json`/lockfile/tsconfig/vitest config unchanged from the seed.
+- Strict TypeScript (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`); ESM NodeNext, `.js` import suffixes, `import type` for types.
 
 ## Not Present
 
-- Authentication/authorization, rate limiting, CORS, OpenAPI/Swagger, Fastify route schemas, pagination, logging beyond Fastify's built-in logger (on in `server.ts`, off in tests), metrics, migrations.
+- Real authentication, rate limiting, CORS, OpenAPI/Swagger, pagination, audit read API, purge job/endpoint, metrics, multi-process coordination.
 
 ## Related Docs
 
-- `docs/CONTEXT.md`, `docs/BASELINE-API.md`, `docs/TECHSTACK.md`, `docs/DEPENDENCIES.md`, `docs/CODEMAP.md`, `docs/PATTERNS/INDEX.md`
+- `docs/CONTEXT.md`, `docs/BASELINE-API.md`, `docs/EXP-003-COMPATIBILITY.md`, `docs/TECHSTACK.md`, `docs/DEPENDENCIES.md`, `docs/CODEMAP.md`, `docs/PATTERNS/INDEX.md`
 - `agents/IMPLEMENTATION.md`, `docs/ASSUMPTIONS.md`, `docs/TODO.md`, `agents/MEMORY.md`

@@ -1,6 +1,6 @@
 # EXP-003 Tech Specs (WHAT)
 
-Status: Phase 4 draft, revised after the Phase 5 review (`plans/EXP-003/phase5-review-findings.md`) and the evaluator plan-reconciliation (`plans/EXP-003/evaluator-plan-review.md`), still awaiting Phase 6 HITL — no approval of this document exists yet. Design of record: `plans/EXP-003/architecture-notes.md` → `## Design Review Revision 2` + `### Evaluator consistency reconciliation` (approved at Phase 3, controlling). Draft v1 / Revision 1 = history only. Companion HOW: `plans/EXP-003/EXP-003-PLAN.md`. Specs own target state; plan owns steps. Section IDs `S<n>` are stable cross-reference anchors.
+Status: **Phase 6 APPROVED** (2026-10-14, author directly in this session: "Yes, I reviewed the plan and specs. Keep BASELINE-API.md unchanged, use separate compatibility notes, and preserve HTTP 400/413/415. Proceed with the original implementation plan and stop at Phase10 for my review."). Phases7–13 are now complete with187 tests passing; see HANDOFF.md and COORDINATOR-CLOSEOUT.md. Changelog entries below describe their historical planning checkpoints, not current pending approvals. Design of record: `plans/EXP-003/architecture-notes.md` → `## Design Review Revision 2` + `### Evaluator consistency reconciliation` (approved at Phase 3, controlling). Draft v1 / Revision 1 = history only. Companion HOW: `plans/EXP-003/EXP-003-PLAN.md`. Specs own target state; plan owns steps. Section IDs `S<n>` are stable cross-reference anchors.
 
 ## Changelog (post Phase-5 review, 2026-10-13)
 

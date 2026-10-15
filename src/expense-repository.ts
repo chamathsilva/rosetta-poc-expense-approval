@@ -4,7 +4,9 @@ import {
   EXPENSE_STATUSES,
   type Expense,
   type ExpenseDecision,
+  type ExpenseRestoration,
   type ExpenseStatus,
+  type ExpenseTombstone,
   type NewExpense
 } from "./domain.js";
 
@@ -52,6 +54,7 @@ function mapExpense(row: Record<string, unknown>): Expense {
 
   return {
     id: requiredString(row, "id"),
+    tenantId: requiredString(row, "tenant_id"),
     employeeId: requiredString(row, "employee_id"),
     description: requiredString(row, "description"),
     amountCents,
@@ -60,7 +63,8 @@ function mapExpense(row: Record<string, unknown>): Expense {
     reviewerId: nullableString(row, "reviewer_id"),
     decisionNote: nullableString(row, "decision_note"),
     createdAt: requiredString(row, "created_at"),
-    updatedAt: requiredString(row, "updated_at")
+    updatedAt: requiredString(row, "updated_at"),
+    deletedAt: nullableString(row, "deleted_at")
   };
 }
 
@@ -71,6 +75,7 @@ export class ExpenseRepository {
     this.database.prepare(`
       INSERT INTO expenses (
         id,
+        tenant_id,
         employee_id,
         description,
         amount_cents,
@@ -79,10 +84,13 @@ export class ExpenseRepository {
         reviewer_id,
         decision_note,
         created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, 'SUBMITTED', NULL, NULL, ?, ?)
+        updated_at,
+        deleted_at,
+        deleted_by
+      ) VALUES (?, ?, ?, ?, ?, ?, 'SUBMITTED', NULL, NULL, ?, ?, NULL, NULL)
     `).run(
       input.id,
+      input.tenantId,
       input.employeeId,
       input.description,
       input.amountCents,
@@ -91,7 +99,7 @@ export class ExpenseRepository {
       input.createdAt
     );
 
-    const expense = this.findById(input.id);
+    const expense = this.findInTenant(input.tenantId, input.id);
 
     if (expense === undefined) {
       throw new Error("Created expense could not be read");
@@ -100,27 +108,37 @@ export class ExpenseRepository {
     return expense;
   }
 
-  public list(): Expense[] {
+  public listVisible(scope: {
+    tenantId: string;
+    employeeId: string | null;
+  }): Expense[] {
     const rows = this.database.prepare(`
       SELECT *
       FROM expenses
+      WHERE tenant_id = ?
+        AND deleted_at IS NULL
+        AND (? IS NULL OR employee_id = ?)
       ORDER BY updated_at DESC, id ASC
-    `).all();
+    `).all(scope.tenantId, scope.employeeId, scope.employeeId);
 
     return rows.map(mapExpense);
   }
 
-  public findById(expenseId: string): Expense | undefined {
+  public findInTenant(
+    tenantId: string,
+    expenseId: string
+  ): Expense | undefined {
     const row = this.database.prepare(`
       SELECT *
       FROM expenses
-      WHERE id = ?
-    `).get(expenseId);
+      WHERE tenant_id = ? AND id = ?
+    `).get(tenantId, expenseId);
 
     return row === undefined ? undefined : mapExpense(row);
   }
 
   public decide(
+    tenantId: string,
     expenseId: string,
     decision: ExpenseDecision
   ): Expense | undefined {
@@ -131,12 +149,13 @@ export class ExpenseRepository {
         reviewer_id = ?,
         decision_note = ?,
         updated_at = ?
-      WHERE id = ? AND status = 'SUBMITTED'
+      WHERE tenant_id = ? AND id = ? AND status = 'SUBMITTED' AND deleted_at IS NULL
     `).run(
       decision.status,
       decision.reviewerId,
       decision.note,
       decision.decidedAt,
+      tenantId,
       expenseId
     );
 
@@ -144,6 +163,54 @@ export class ExpenseRepository {
       return undefined;
     }
 
-    return this.findById(expenseId);
+    return this.findInTenant(tenantId, expenseId);
+  }
+
+  public tombstone(
+    tenantId: string,
+    expenseId: string,
+    tombstone: ExpenseTombstone
+  ): Expense | undefined {
+    const result = this.database.prepare(`
+      UPDATE expenses
+      SET
+        deleted_at = ?,
+        deleted_by = ?,
+        updated_at = ?
+      WHERE tenant_id = ? AND id = ? AND status = 'SUBMITTED' AND deleted_at IS NULL
+    `).run(
+      tombstone.deletedAt,
+      tombstone.deletedBy,
+      tombstone.deletedAt,
+      tenantId,
+      expenseId
+    );
+
+    if (result.changes === 0) {
+      return undefined;
+    }
+
+    return this.findInTenant(tenantId, expenseId);
+  }
+
+  public restore(
+    tenantId: string,
+    expenseId: string,
+    restoration: ExpenseRestoration
+  ): Expense | undefined {
+    const result = this.database.prepare(`
+      UPDATE expenses
+      SET
+        deleted_at = NULL,
+        deleted_by = NULL,
+        updated_at = ?
+      WHERE tenant_id = ? AND id = ? AND deleted_at IS NOT NULL AND status = 'SUBMITTED'
+    `).run(restoration.restoredAt, tenantId, expenseId);
+
+    if (result.changes === 0) {
+      return undefined;
+    }
+
+    return this.findInTenant(tenantId, expenseId);
   }
 }

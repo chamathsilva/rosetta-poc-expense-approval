@@ -2,67 +2,71 @@
 
 Purpose: business and behavioral context for this workspace, from a stakeholder point of view.
 Contains: why the project exists, domain, actors, lifecycle, business rules, scope boundary, vocabulary.
-Excludes: technical details (see `docs/ARCHITECTURE.md`, `docs/TECHSTACK.md`); exact HTTP contract (see `docs/BASELINE-API.md`).
+Excludes: technical details (see `docs/ARCHITECTURE.md`, `docs/TECHSTACK.md`); exact HTTP contract (see `docs/BASELINE-API.md`, `docs/EXP-003-COMPATIBILITY.md`).
 Style: terse bullets, grep-friendly `##` headers, no code. Keep under 100 lines.
 
 ## Why This Project Exists
 
 - Disposable, public, deliberately simple expense-approval service ("Rosetta POC: Expense Approval").
 - Serves as the shared, neutral starting point for an independent, evidence-backed Rosetta evaluation / case study.
-- Immutable starting point: Git tag `expense-seed-v1` (expense case study and governance probes start from it).
+- Immutable starting point: Git tag `expense-seed-v1`. EXP-003 extends that seed with tenancy, roles, audit and lifecycle; it does not replace it.
 - Not a production system; no real users, money, or data.
 
 ## Study Boundary
 
 - Experiment prompts, hidden evaluation expectations, and scoring criteria live outside this repository by design.
 - Do not guess, search for, or optimize toward hidden evaluation criteria.
-- Implementation requirements arrive in later sessions; until then, the baseline behavior below is the full scope.
-- Do not invent product scope beyond what the baseline does or what approved requirements state.
+- Do not invent product scope beyond what is implemented or what approved requirements state.
 
 ## Domain
 
-- An employee submits an expense claim; a reviewer approves or rejects it once.
-- Expense data: employee identifier, description, amount, currency, status, reviewer identifier, optional decision note, created/updated times.
+- An employee submits an expense claim; a manager or finance reviewer approves or rejects it once.
+- Expense data: tenant, employee identifier, description, amount, currency, status, reviewer identifier, optional decision note, created/updated/deleted times.
 
-## Actors
+## Actors and Simulated Auth
 
-- Employee: submits expenses (identified only by a free-form employee identifier supplied with the request).
-- Reviewer: approves or rejects a submitted expense (identified only by a free-form reviewer identifier).
-- No sign-in, roles, or permission checks in the baseline; anyone calling the service can act as either actor.
+- Every `/expenses*` request carries `x-tenant-id`, `x-user-id`, `x-role` headers, resolved into an `actor` by a request hook.
+- **Disclaimer (binding): these headers simulate a trusted upstream authentication layer. They are not production authentication.** Any caller can forge them; nothing here verifies real identity.
+- Roles: `employee` (submits, deletes and restores own expenses only), `manager` (decides within approval limit), `finance` (decides any amount). A role never acts as another.
+- All data and actions are scoped to the caller's tenant; no cross-tenant visibility or mutation.
+
+## Decision Policy (fixed)
+
+- Only `manager` or `finance` may approve/reject; `employee` cannot decide, including on its own expense.
+- No actor may decide (approve or reject) an expense it submitted (self-decision forbidden), regardless of role.
+- `manager` may approve up to and including 100,000 cents; above that, approval is rejected (reject is unlimited for a manager). `finance` may approve or reject any amount.
+- Only `employee` may create, delete or restore an expense, and only its own.
 
 ## Expense Lifecycle
 
 - New submission always starts as `SUBMITTED`.
-- `SUBMITTED` -> `APPROVED` or `SUBMITTED` -> `REJECTED`.
-- `APPROVED` and `REJECTED` are final: a second decision is refused ("already decided").
-- No edit, withdraw, reopen, or delete in the baseline (deletion is explicitly absent).
+- `SUBMITTED` -> `APPROVED` or `SUBMITTED` -> `REJECTED`. A second decision is refused ("already decided").
+- A `SUBMITTED` (not yet decided) expense may be logically deleted (tombstoned) by its owner; a decided expense cannot be deleted.
+- A tombstoned expense is restorable by its owner within 30 days of deletion (half-open window: the 30-day instant itself is already expired). After the window, or for a non-tombstoned expense, restore is refused.
+- There is no purge: expired tombstones are retained indefinitely. No edit, withdraw or reopen exists.
 
-## Business Rules (Baseline)
+## Audit and Idempotency (business terms)
 
-- Amount is a positive whole number of minor currency units (cents), capped at 100,000,000 (1,000,000.00 in major units).
-- Currency is a three-letter uppercase code (e.g. `USD`); only the format is checked, not membership in a currency list.
-- No currency conversion; each expense keeps its own currency.
-- Employee and reviewer identifiers: required, up to 100 characters.
-- Description: required, up to 500 characters; decision note: optional, up to 500 characters.
-- Surrounding whitespace is trimmed; blank text counts as missing.
-- Unknown or extra fields in a request are rejected as invalid input.
-- Expense listing shows most recently updated first (ties broken by identifier).
-- Outcomes users can see: created, found, not found, invalid input, already decided.
+- Every successful create/decide/delete/restore is recorded once in an append-only history, with who/when/what and no sensitive request content. History cannot be edited or erased through the API, and it survives deletion of the expense it concerns.
+- Every create/decide/delete/restore call must carry a client-supplied idempotency key, so a retried request (e.g. after a dropped connection) returns the original result instead of repeating the effect. A key reused with different request content is rejected, not silently replayed.
 
-## Capabilities (Baseline)
+## Attachments
 
-- Check static service liveness (not a database readiness probe).
-- Submit an expense.
-- List all expenses (no filtering, search, or paging).
-- Read one expense.
-- Approve or reject a submitted expense.
-- Data is stored persistently; seed tests verify closing/reopening app instances in one process, not an actual service-process restart.
+- Attachments/receipts are unsupported. Treat as out of scope, not planned.
 
-## Not In Baseline
+## Baseline Compatibility
 
-- Authentication, authorization, roles, self-approval prevention.
-- Multi-step or threshold-based approval, delegation, notifications.
-- Reporting, budgets, policies, attachments/receipts, reimbursement/payment.
+- This workstream deliberately changes 8 points of behavior from the neutral seed (new required headers and idempotency keys, tenant/role scoping, new delete/restore routes, schema migration, and framework error statuses). Full list, rationale and judgment calls: `docs/EXP-003-COMPATIBILITY.md`.
+- `docs/BASELINE-API.md` is unchanged (human-owned; see `docs/ASSUMPTIONS.md` A9).
+
+## Capabilities
+
+- Liveness check; submit, list (tenant/role-scoped), read, approve/reject, delete, restore an expense.
+- Persistent SQLite storage with in-place schema migration preserving pre-existing rows.
+
+## Not In Baseline / Out of Scope
+
+- Real authentication, multi-process writers, pagination, audit read API, purge job, attachments/receipts, currency conversion.
 - Treat these as unknown, not as forbidden or planned, until requirements say otherwise.
 
 ## Stakeholders
@@ -72,14 +76,13 @@ Style: terse bullets, grep-friendly `##` headers, no code. Keep under 100 lines.
 
 ## Vocabulary
 
-- Expense submission: a request created by submitting an expense, starting in status `SUBMITTED`.
-- Decision: the approve/reject action applied once to a `SUBMITTED` expense.
-- Seed: the neutral starter state at tag `expense-seed-v1`.
-- Baseline: behavior present in the seed, documented in `docs/BASELINE-API.md`.
+- Tenant: an isolation boundary; nothing crosses it, ever.
+- Tombstone: a logical delete (`deletedAt` set); the row is retained, hidden from ordinary reads.
+- Idempotency key: a client-supplied token scoping a mutation to "this exact call happened once."
+- Seed / Baseline: the neutral starter state at tag `expense-seed-v1`, documented in `docs/BASELINE-API.md`.
 
 ## Related Docs
 
-- `docs/BASELINE-API.md`: request/response examples and validation limits (human-owned; preserve).
-- `docs/ARCHITECTURE.md`: technical structure.
-- `docs/ASSUMPTIONS.md`: open unknowns, including future scope.
-- `agents/IMPLEMENTATION.md`: implementation state and change log.
+- `docs/BASELINE-API.md`: seed request/response examples (human-owned; preserve).
+- `docs/EXP-003-COMPATIBILITY.md`: full list of breaks and judgment calls.
+- `docs/ARCHITECTURE.md`: technical structure. `docs/ASSUMPTIONS.md`: open unknowns. `agents/IMPLEMENTATION.md`: implementation state.

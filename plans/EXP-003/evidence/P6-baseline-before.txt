@@ -1,0 +1,112 @@
+Publication copy: local checkout paths and timing fields omitted; original retained privately.
+
+ RUN  v5.0.0 <repo>
+
+ ❯ tests/app.test.ts (6 tests | 5 failed) 87ms
+   ❯ expense starter API (6)
+     × creates, reads, and lists an expense 7ms
+     × approves a submitted expense once 3ms
+     × rejects invalid expense input 3ms
+     × persists expenses across application instances 8ms
+     × does not expose an expense deletion route in the starter 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/app.test.ts > expense starter API > creates, reads, and lists an expense
+AssertionError: expected 401 to be 201 // Object.is equality
+
+- Expected
++ Received
+
+- 201
++ 401
+
+ ❯ tests/app.test.ts:63:32
+     61|     const created = await createExpense(app);
+     62|
+     63|     expect(created.statusCode).toBe(201);
+       |                                ^
+     64|     expect(created.json()).toEqual({
+     65|       expense: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  tests/app.test.ts > expense starter API > approves a submitted expense once
+AssertionError: expected 401 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 401
+
+ ❯ tests/app.test.ts:105:33
+    103|     });
+    104|
+    105|     expect(approved.statusCode).toBe(200);
+       |                                 ^
+    106|     expect(approved.json().expense).toMatchObject({
+    107|       status: "APPROVED",
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  tests/app.test.ts > expense starter API > rejects invalid expense input
+AssertionError: expected 401 to be 400 // Object.is equality
+
+- Expected
++ Received
+
+- 400
++ 401
+
+ ❯ tests/app.test.ts:139:33
+    137|     });
+    138|
+    139|     expect(response.statusCode).toBe(400);
+       |                                 ^
+    140|     expect(response.json().error.code).toBe("VALIDATION_ERROR");
+    141|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  tests/app.test.ts > expense starter API > persists expenses across application instances
+AssertionError: expected 401 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 401
+
+ ❯ tests/app.test.ts:159:33
+    157|     });
+    158|
+    159|     expect(response.statusCode).toBe(200);
+       |                                 ^
+    160|     expect(response.json().expense.description).toBe(
+    161|       "Conference registration"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  tests/app.test.ts > expense starter API > does not expose an expense deletion route in the starter
+AssertionError: expected 401 to be 404 // Object.is equality
+
+- Expected
++ Received
+
+- 404
++ 401
+
+ ❯ tests/app.test.ts:174:33
+    172|     });
+    173|
+    174|     expect(response.statusCode).toBe(404);
+       |                                 ^
+    175|     expect(response.json()).toEqual({
+    176|       error: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 1 passed (6)

@@ -1,0 +1,18 @@
+Publication copy: local checkout paths and timing fields omitted; original retained privately.
+EXP-003 P0 pinned scratch probe (manual, not an automated test run, not Phase 7 test-suite evidence)
+Date: 2026-10-14
+Pin: v24.21.0 / npm 11.6.2
+Script: agents/TEMP/EXP-003/sqlite-runtime-probe.mjs
+---
+[PASS] no DatabaseSync#transaction method
+[PASS] isTransaction tracks BEGIN/COMMIT/ROLLBACK
+[PASS] nested BEGIN errors
+[PASS] RAISE(ABORT) surfaces as thrown Error, transaction still open
+[PASS] PRAGMA user_version and DDL roll back
+[PASS] json_valid exists
+[PASS] ADD COLUMN ... NOT NULL DEFAULT works on a populated table
+[PASS] .run().changes is a number
+[PASS] BEFORE INSERT trigger sees the DEFAULT when a column is omitted
+[PASS] a persistent trigger created through a second connection affects writes through the first
+
+ALL FACTS CONFIRMED

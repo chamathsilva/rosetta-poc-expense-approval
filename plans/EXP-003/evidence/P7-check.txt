@@ -1,0 +1,23 @@
+Publication copy: local checkout paths and timing fields omitted; original retained privately.
+
+> rosetta-poc-expense-approval@0.0.0 check
+> npm run typecheck && npm test && npm run build
+
+
+> rosetta-poc-expense-approval@0.0.0 typecheck
+> tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit
+
+
+> rosetta-poc-expense-approval@0.0.0 test
+> vitest run
+
+
+ RUN  v5.0.0 <repo>
+
+
+ Test Files  9 passed (9)
+      Tests  187 passed (187)
+
+
+> rosetta-poc-expense-approval@0.0.0 build
+> tsc -p tsconfig.json
